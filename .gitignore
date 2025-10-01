@@ -1,0 +1,12 @@
+# SAFETY
+code/security_config.py
+
+# FOLDERS
+.DS_Store
+code/.DS_Store
+data/
+graphs/
+ugly/
+code/__pycache__
+code/_archive
+test/**/
