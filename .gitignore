@@ -1,10 +1,13 @@
 # SAFETY
 code/security_config.py
 
-# FOLDERS
+# FILES
 .DS_Store
 code/.DS_Store
-data/
+code/.ipynb_checkpoints
+
+# FOLDERS
+data/*/
 graphs/
 ugly/
 code/__pycache__
