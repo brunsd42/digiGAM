@@ -441,11 +441,11 @@ def update_logbook(test_number, issues_list, test='', test_step=''):
         
         today_date = datetime.now().strftime('%Y-%m-%d')
         file_path = f"../test/issue_lists_{today_date}"
-        file_name = f"/{test_number}_issue_list.xlsx"
+        file_name = f"/{test_number}_issue_list.csv"
         os.makedirs(file_path, exist_ok=True)
 
         issues_df = pd.DataFrame(issues_list)
-        issues_df.to_excel(file_path+file_name, index=False)
+        issues_df.to_csv(file_path+file_name, index=False)
         logbook_df.loc[logbook_df['test number'] == test_number, 'pass/fail'] = 'fail'
         logbook_df.loc[logbook_df['test number'] == test_number, 'check file'] = file_name
     else:
