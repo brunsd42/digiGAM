@@ -6,8 +6,15 @@ code/security_config.py
 code/.DS_Store
 code/.ipynb_checkpoints
 
+# Ignore all CSV and Excel files in the data folder
+data/**/*.csv
+data/**/*.xlsx
+data/**/*.zip
+data/**/*.bat
+data/**/*.png
+data/**/*.mov
+
 # FOLDERS
-data/*/
 graphs/
 ugly/
 code/__pycache__
