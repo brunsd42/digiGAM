@@ -1,0 +1,447 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[ ]:
+
+
+import base64
+import json
+import requests
+from datetime import datetime, timedelta
+from tqdm import tqdm
+
+import pandas as pd 
+pd.set_option('display.float_format', '{:.00f}'.format)
+
+import os 
+import numpy as np
+import ast
+from sympy import symbols, solve, lambdify
+
+
+# In[ ]:
+
+
+import sys
+from pathlib import Path
+
+# Add ../helper to sys.path
+helper_path = Path(__file__).resolve().parent.parent / "helper"
+sys.path.insert(0, str(helper_path))
+
+# Now import your modules 
+from config_GAM2025 import gam_info
+
+from security_config import emplifi_key
+from functions import execute_sql_query
+import test_functions
+
+
+# In[ ]:
+
+
+platformID = 'TTK'
+
+# country
+cols = ['PlaceID',	'TikTok Codes']
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", 
+                              sheet_name='CountryID', usecols=cols, keep_default_na=False )
+
+# week 
+week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
+                            sheet_name='GAM Period', keep_default_na=False)
+
+week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
+week_tester['week_ending'] = pd.to_datetime(week_tester['week_ending'])
+
+# social media accounts
+dtype_dict = {'Channel ID': 'str',
+              'Linked FB Account': 'str'}
+socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
+                                     sheet_name='Social Media Accounts new', keep_default_na=False)
+
+socialmedia_accounts = socialmedia_accounts[(socialmedia_accounts['PlatformID'] == platformID)
+                                            & 
+                                            (socialmedia_accounts['Status'] == 'active')]
+socialmedia_accounts = socialmedia_accounts.rename(columns={'Excluding UK': 'Channel Group'})
+
+channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
+formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
+socialmedia_accounts.sample()
+
+
+# # read in 
+
+# In[ ]:
+
+
+dataframes = []
+storage_dir = f"../data/raw/{platformID}/post_level/"
+csv_files = [f for f in os.listdir(storage_dir) if f.endswith(".csv")]
+for f in csv_files:
+    file_path = os.path.join(storage_dir, f)
+    try:
+        parts = f.replace(".csv", "").split("_")
+        file_timeinfo = parts[0]
+        platformID = parts[1]
+        profile_id = parts[2]
+        week_str = parts[3]
+
+        df = pd.read_csv(file_path)
+        df["platformID"] = platformID
+        df["profile_id"] = profile_id
+        df["w/c"] = week_str
+        
+        if not df.empty:
+            dataframes.append(df)
+    except pd.errors.EmptyDataError:
+        print(f"❌ Could not read file (empty or malformed): {f}")
+
+# Combine all non-empty DataFrames
+if dataframes:
+    post_level_df = pd.concat(dataframes, ignore_index=True)
+    print("✅ Combined DataFrame created.")
+    display(post_level_df.head())
+else:
+    print("🚫 No valid data found to combine.")
+
+
+# In[ ]:
+
+
+post_level_df = post_level_df.rename(columns={'platformID': 'PlatformID'})
+# Count unique weeks per profile
+week_counts = post_level_df.groupby('profile_id')['w/c'].nunique().reset_index()
+week_counts.columns = ['profile_id', 'number_of_weeks']
+
+# Optional: sort by number of weeks
+week_counts = week_counts.sort_values(by='number_of_weeks', ascending=False)
+
+# Display 
+print(week_counts)
+
+import missingno as msno
+import matplotlib.pyplot as plt
+
+# Assuming post_level_df is already loaded and contains 'profile_id' and 'w/c'
+# Create a pivot table: profiles as rows, weeks as columns
+pivot_df = post_level_df.pivot_table(columns='profile_id', index='w/c', aggfunc='size')
+
+# Convert to boolean: True = data exists, False = missing
+#pivot_df = pivot_df.astype(bool)
+
+# Visualize missing data
+msno.matrix(pivot_df)
+plt.title("Missing Weeks per TikTok Profile")
+plt.show()
+
+
+# In[ ]:
+
+
+def extract_author_info(row):
+    if pd.isna(row):
+        return pd.Series({'id': None, 'name': None, 'url': None})
+
+    if isinstance(row, str):
+        try:
+            author_dict = ast.literal_eval(row)
+        except (ValueError, SyntaxError):
+            return pd.Series({'id': None, 'name': None, 'url': None})
+    elif isinstance(row, dict):
+        author_dict = row
+    else:
+        return pd.Series({'id': None, 'name': None, 'url': None})
+
+    return pd.Series({
+        'id': author_dict.get('id'),
+        'name': author_dict.get('name'),
+        'url': author_dict.get('url')
+    })
+
+# Apply the function
+
+post_level_df[["Channel ID", "Channel Name", "Channel URL"]] = post_level_df['author'].apply(extract_author_info)
+
+
+# In[ ]:
+
+
+post_level_df.columns
+
+
+# # Views
+
+# In[ ]:
+
+
+minnie_cols_used = {'Date': 'w/c', #minnie has a day by day breakdown and then calculates the average
+               'Profile ID': "Channel ID", # author['name'],
+               'Profile name': "Channel Name", # author['url'],
+               'Profile URL': "Channel URL", #author['id'],
+               #'Post detail URL': 'link',
+               #'Content ID': 'link', # splice out from link
+               'Platform': 'PlatformID', 
+               'Content type': 'content_type',
+               'Media type': 'media',
+               #'Title': '', # missing
+               #'Description': '', # missing
+               'Content': 'message',
+               #'Link URL': '', #unclear
+               'View on platform': 'link',
+               'Engagements': 'insights_engagements',
+               'Total reach': 'insights_reach', #but number is different? 
+               'Video length (sec)': 'duration',
+               'Video view count': 'insights_video_views',
+               'Total video view time (sec)': 'insights_view_time',
+               'Average time watched (sec)': 'insights_avg_time_watched',
+               'Completion rate': 'insights_completion_rate',
+              }
+
+views_df = post_level_df[minnie_cols_used.values()]
+views_df['link'] = views_df['link'].fillna('').astype(str)
+views_df['content_id'] = views_df['link'].str.split('/').str[-1].str.split('?').str[0]
+views_df.head()
+
+
+# In[ ]:
+
+
+# optional: test video length is all in seconds
+print(f"number of entries: {views_df.shape}")
+views_df = views_df[~views_df['insights_reach'].isna()]
+print(f"number of entries that have reach: {views_df.shape}")
+
+cols_fill_nan = ['insights_avg_time_watched', 'duration', 'insights_reach',
+                 'insights_completion_rate']
+views_df[cols_fill_nan] = views_df[cols_fill_nan].fillna(0)  # or any other value you'd like
+
+
+# In[ ]:
+
+
+# Define x and y values for each row
+views_df['x1'] = 0
+views_df['x2'] = views_df['insights_avg_time_watched']
+views_df['x3'] = views_df['duration']
+views_df['x output'] = 10
+
+views_df['y1'] = views_df['insights_reach']
+views_df['y2'] = views_df['insights_reach'] / 2
+views_df['y3'] = views_df['insights_reach'] * views_df['insights_completion_rate']
+
+x_sym, a_sym, b_sym, c_sym = symbols('x a b c')
+
+def find_quadratic_coefficients(point1, point2, point3):
+    x1, y1 = point1
+    x2, y2 = point2
+    x3, y3 = point3
+    
+    if len({x1, x2, x3}) < 3:
+        return None
+
+    y_expr = a_sym * x_sym**2 + b_sym * x_sym + c_sym
+
+    eq1 = y_expr.subs(x_sym, x1) - y1
+    eq2 = y_expr.subs(x_sym, x2) - y2
+    eq3 = y_expr.subs(x_sym, x3) - y3
+
+    solutions = solve((eq1, eq2, eq3), (a_sym, b_sym, c_sym))
+    return solutions
+
+
+def apply_quadratic(row):
+    if row['x3'] == 0:
+        return 100
+    if len(set([row['x1'], row['x2'], row['x3']])) < 3:
+    # Handle the case where any two x-values are the same
+        return 100
+
+    point1 = (row['x1'], row['y1'])
+    point2 = (row['x2'], row['y2'])
+    point3 = (row['x3'], row['y3'])
+    x_val = row['x output']
+
+    coeffs = find_quadratic_coefficients(point1, point2, point3)
+    if coeffs is None:
+        return np.nan
+
+    # If all y-values are zero, use only the b coefficient
+    if row['y1'] == 0 and row['y2'] == 0 and row['y3'] == 0:
+        return 10 * coeffs[b_sym]
+
+    # Otherwise, evaluate full quadratic
+    y_expr = a_sym * x_sym**2 + b_sym * x_sym + c_sym
+    y_val = y_expr.subs({a_sym: coeffs[a_sym], b_sym: coeffs[b_sym], c_sym: coeffs[c_sym], x_sym: x_val})
+    return y_val
+
+
+# Create new column with interpolated values
+views_df['30sec_video_views'] = views_df.apply(apply_quadratic, axis=1).astype(float)
+views_df['completed_video_views'] = views_df['insights_completion_rate'] * views_df['insights_reach']
+
+conditions = [
+    views_df['insights_reach'] == 0,
+    (views_df['completed_video_views'].round(0) > views_df['30sec_video_views'].round(0)),
+    views_df['insights_avg_time_watched'] <= 10,
+    (views_df['insights_avg_time_watched'] > 10) & (views_df['insights_avg_time_watched'] <= 15),
+    views_df['insights_reach'] < views_df['30sec_video_views'],
+    views_df['duration'] == 0
+]
+
+choices = [
+    views_df['insights_engagements'],
+    views_df['completed_video_views'],
+    views_df['insights_engagements'],
+    views_df['insights_reach'] * 0.67,
+    views_df['insights_reach'] * 0.799,
+    views_df['insights_engagements']
+]
+
+views_df['final_video_views'] = np.select(conditions, choices, 
+                                            default=views_df['30sec_video_views'])
+
+
+# In[ ]:
+
+
+views_df = views_df.merge(socialmedia_accounts[["Channel ID", "ServiceID", "Linked FB Account"]], 
+                              on='Channel ID', how='left', indicator=True)
+print(views_df._merge.value_counts())
+views_df = views_df.drop(columns=['_merge'])
+
+temp =views_df[views_df['content_id'] == '7353576714619931936']
+(temp['completed_video_views'].round(0) > temp['30sec_video_views'].round(0)),
+
+completed = temp['completed_video_views'].round(0).iloc[0]
+thirty_sec = temp['30sec_video_views'].round(0).iloc[0]
+
+comparison = completed > thirty_sec
+print(comparison)  # Should be False
+
+
+# In[ ]:
+
+
+cols = ['content_id', 'ServiceID', 'Channel ID', 'Channel Name', 'w/c', 
+        'link',
+        'final_video_views', 'Linked FB Account'
+       ]
+views_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_views.csv",
+                       index=None)
+
+
+# # Country 
+
+# In[ ]:
+
+
+country_df = post_level_df.copy()
+
+
+# In[ ]:
+
+
+# Step 1: Parse the stringified list of country-percentage dictionaries
+country_df['parsed_viewers'] = country_df['insights_viewers_by_country'].apply(
+    lambda x: ast.literal_eval(x) if isinstance(x, str) else []
+)
+
+# Step 2: Explode the parsed list into separate rows
+exploded_df = country_df.explode('parsed_viewers').reset_index(drop=True)
+
+# Step 3: Extract 'country' and 'percentage' from each dictionary
+exploded_df[['country', 'percentage']] = exploded_df['parsed_viewers'].apply(
+    lambda entry: pd.Series({
+        'country': entry.get('country') if isinstance(entry, dict) else None,
+        'percentage': entry.get('percentage') if isinstance(entry, dict) else None
+    })
+)
+
+# Step 4: Drop the intermediate column
+exploded_df.drop(columns=['parsed_viewers'], inplace=True)
+exploded_df['country'] = exploded_df['country'].replace('Others', 'ZZ')
+exploded_df['country'] = exploded_df['country'].fillna('ZZ')
+exploded_df.head()
+
+
+# In[ ]:
+
+
+exploded_df = exploded_df.rename(columns={'country': 'TikTok Codes'})
+ttk_country = exploded_df.merge(country_codes[['TikTok Codes', 'PlaceID']], on='TikTok Codes', how='left',
+                 indicator=True)
+
+print(f"mismatches? \n{ttk_country._merge.value_counts()}")
+ttk_country = ttk_country.drop(columns='_merge')
+
+
+# In[ ]:
+
+
+ttk_country.columns
+
+
+# In[ ]:
+
+
+country_cols = ['Channel ID', 'link', 'PlaceID', 'percentage', 'w/c', 'platformID']
+ttk_country[country_cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country.csv",
+                  index=None, na_rep='')
+
+
+# # combine views & country
+
+# In[ ]:
+
+
+# post_url: link
+
+ttk_data = ttk_country.merge(views_df, on=['Channel ID', 'link', 'w/c'], how='outer',
+                                indicator=True)
+print(f"mismatches between datasets! unreviewed yet\n {ttk_data._merge.value_counts()}")
+
+ttk_data = ttk_data.drop(columns=['_merge'])
+
+ttk_data['country_views'] = ttk_data["final_video_views"] * ttk_data["percentage"]
+ttk_perCountry = ttk_data.groupby(['w/c', 'Channel ID', 
+                                'PlaceID'])['country_views'].sum().rename('country').reset_index()
+ttk_global = ttk_data.groupby(['w/c', 'Channel ID', 
+                              ])['country_views'].sum().rename('global').reset_index()
+
+ttk_df = ttk_perCountry.merge(ttk_global, on=['Channel ID', 'w/c'], how='outer', 
+                           indicator=True)
+print(f"no mismatches \n {ttk_df._merge.value_counts()}")
+ttk_df = ttk_df.drop(columns=['_merge'])
+
+ttk_df['country_%'] = ttk_df['country']/ttk_df['global']
+ttk_df.head()
+
+
+# In[ ]:
+
+
+annual_ttk_country = ttk_df.groupby(['Channel ID', 'PlaceID'])['country_%'].mean().rename('AvgCountry%').reset_index()
+annual_ttk_global = annual_ttk_country.groupby(['Channel ID' ])['AvgCountry%'].sum().rename('AvgGlobal%').reset_index()
+
+annual_ttk_df = annual_ttk_country.merge(annual_ttk_global, on='Channel ID', how='outer', indicator=True)
+print(f"no mismatches \n {annual_ttk_df._merge.value_counts()}")
+annual_ttk_df = annual_ttk_df.drop(columns=['_merge'])
+
+annual_ttk_df['country_%'] = annual_ttk_df['AvgCountry%']/annual_ttk_df['AvgGlobal%']
+
+annual_ttk_df.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uV_country.csv",
+                       index=None)
+
+
+# In[ ]:
+
+
+annual_ttk_df[annual_ttk_df['Channel ID'] == '1f2dfe12-0863-482d-9b25-9d7dec3556cc']
+
+
+# In[ ]:
+
+
+
+

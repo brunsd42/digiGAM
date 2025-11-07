@@ -16,6 +16,7 @@ data/**/*.mov
 
 # FOLDERS
 graphs/
+logs/
 ugly/
 code/__pycache__
 code/_archive
