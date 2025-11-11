@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[8]:
 
 
 platformID = 'INS'
 
 
-# In[2]:
+# In[9]:
 
 
 from datetime import datetime
@@ -20,14 +20,19 @@ import psycopg2
 
 # ## import helper 
 
-# In[5]:
+# In[10]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
@@ -35,7 +40,7 @@ from config_GAM2025 import gam_info
 import test_functions 
 
 
-# In[72]:
+# In[11]:
 
 
 # country
@@ -46,26 +51,26 @@ week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM 
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 
 # social media accounts
-socialmedia_accounts = pd.read_excel("helper/ins_account_lookup.xlsx")
+socialmedia_accounts = pd.read_excel("../helper/ins_account_lookup.xlsx")
 
 
 # # ingest 
 
-# In[23]:
+# In[12]:
 
 
 engagements = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_engagements_final.csv")
 engagements.columns
 
 
-# In[24]:
+# In[13]:
 
 
 country = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_geog.csv")
 country.columns
 
 
-# In[25]:
+# In[14]:
 
 
 country_annual_avg = country.groupby(['Channel ID', 'Channel Name', 
@@ -74,7 +79,7 @@ country_annual_avg = country.groupby(['Channel ID', 'Channel Name',
 
 # # combine 
 
-# In[46]:
+# In[15]:
 
 
 combined = engagements.merge(country, on=["Channel ID", "w/c"], how='left', indicator=True)
@@ -102,7 +107,7 @@ cols = ['Channel ID', 'Channel Name', 'IG Handle', 'ig_user_linked_fb_page_id',
 temp = temp[cols]
 
 
-# In[48]:
+# In[16]:
 
 
 cols = ['Channel ID', 'Channel Name', 'IG Handle', 'ig_user_linked_fb_page_id',
@@ -113,7 +118,7 @@ engagement_country = pd.concat([combined_inner, temp])[cols].rename(columns={'IG
 
 
 
-# In[69]:
+# In[17]:
 
 
 to_clean_country = country_codes[['PlaceID', 'YT-_FBE_codes', gam_info['population_column']]].rename(columns={'YT-_FBE_codes': 'ig_metric_breakdown'})
@@ -127,7 +132,7 @@ final_ig_data['uv_by_country'] = final_ig_data['IG Engaged Users'] * final_ig_da
 
 # # store 
 
-# In[70]:
+# In[18]:
 
 
 cols = ['w/c', 'PlaceID', 'ServiceID', 'Channel ID', 'uv_by_country']

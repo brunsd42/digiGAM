@@ -1,21 +1,28 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 import pandas as pd
 import numpy as np
 
+from IPython.display import display
 
-# In[1]:
+
+# In[2]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
@@ -23,7 +30,7 @@ from config_GAM2025 import gam_info
 import functions
 
 
-# In[2]:
+# In[3]:
 
 
 # Load country mapping
@@ -32,7 +39,7 @@ country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Coun
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
 
-# In[3]:
+# In[4]:
 
 
 # Utility functions
@@ -54,7 +61,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[4]:
+# In[5]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -112,7 +119,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[5]:
+# In[6]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, threshold=0.0001):
@@ -167,7 +174,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[8]:
+# In[9]:
 
 
 # Dataset configuration
@@ -218,7 +225,7 @@ datasets = [
             'PLACEID1': 'PlaceID', 
             'FB Service Code': 'ServiceID', 
             'FB Page ID': 'Channel ID',
-            'Engaged Users by Country': 'Reach',
+            'Engaged Users by Country': 'uv_by_country',
         },
         "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'Channel ID'],
         "method": "integer",
@@ -229,16 +236,349 @@ datasets = [
         "comment": """  
         163571453661989 & 2024-04-15: is also missing in minnie's raw dataset data\final data\FB_GAM2025_REDSHIFT.xlsx
         """
-    }
+    },
+    {
+        "name": "Facebook ALL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook ALL.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_ALLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook ALL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook ALL.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_ALLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook ANW Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook ANW.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_ANWbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook ANY Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook ANY.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_ANYbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook AX2 Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook AX2.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_AX2byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook AXE Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook AXE.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_AXEbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook EN2 Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook EN2 by country.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_EN2byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook ENG Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook ENG by country.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_ENGbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook ENW Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook ENW by country.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_ENWbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook FOA Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook FOA.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_FOAbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook GNL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook GNL.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_GNLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook MA- Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook MA.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_MA-byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook TOT Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook TOT.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_TOTbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook WOR Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook WOR.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_WORbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook WSE Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook WSE.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_WSEbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Facebook WSL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook WSL.xlsx",
+        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_WSLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
 ]
 
 
-# In[28]:
+# In[10]:
 
 
-datasets = [
-
-]
 # Execute comparisons
 for ds in datasets:
     # TODO - test currently doesn't catch additional things in my dataset that are not in minnie's 
@@ -288,10 +628,35 @@ for ds in datasets:
 
     print("Rows missing from new:")
     display(missing)
+    
     print("Rows with differences:")
-    if len(different) > 0:
-        different['diff'] = different['Reach_orig'] - different['Reach_new']
-        display(different.sort_values('diff', ascending=False))
+    if not different.empty:
+        # Identify non-key columns (i.e., columns that are not part of the key_columns)
+        key_cols = ds["key_columns"]
+        metric_cols = [col.replace('_orig', '') for col in different.columns 
+                       if col.endswith('_orig') and col.replace('_orig', '') not in key_cols]
+    
+        # Compute differences for each metric column
+        for col in metric_cols:
+            orig_col = f"{col}_orig"
+            new_col = f"{col}_new"
+            diff_col = f"{col}_diff"
+            if orig_col in different.columns and new_col in different.columns:
+                different[diff_col] = different[orig_col] - different[new_col]
+    
+        # Sort by the largest absolute difference in any metric column
+        diff_cols = [f"{col}_diff" for col in metric_cols]
+        sort_col = diff_cols[0] if diff_cols else None
+        if sort_col:
+            display(different.sort_values(by=sort_col, ascending=False))
+        else:
+            display(different)
     else:
         display(different)
+
+
+# In[ ]:
+
+
+
 

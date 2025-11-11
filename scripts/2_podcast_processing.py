@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[46]:
 
+
+from IPython.display import display
 
 from datetime import datetime
 import pandas as pd
@@ -15,14 +17,19 @@ import missingno as msno
 
 # ## import helper
 
-# In[2]:
+# In[47]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
@@ -31,7 +38,7 @@ from config_GAM2025 import gam_info
 import test_functions 
 
 
-# In[3]:
+# In[48]:
 
 
 # country
@@ -62,7 +69,7 @@ platform_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='P
 
 # # processing
 
-# In[4]:
+# In[49]:
 
 
 # Initialize an empty list to store DataFrames
@@ -94,7 +101,7 @@ df_raw.sample()
 msno.matrix(df_raw)
 
 
-# In[5]:
+# In[50]:
 
 
 test_step="reading in all sql queries"
@@ -133,7 +140,7 @@ msno.matrix(df)
 
 # # IPO data
 
-# In[6]:
+# In[51]:
 
 
 # TODO add this as automation next year 
@@ -192,13 +199,13 @@ for service in service_parents:
     i+=1
 
 
-# In[7]:
+# In[52]:
 
 
 df = pd.concat([df, ipo_data])
 
 
-# In[8]:
+# In[53]:
 
 
 ################################# adding platforms
@@ -221,13 +228,13 @@ for platform in platform_list:
     i +=1
 
 
-# In[9]:
+# In[54]:
 
 
 df = df.groupby(['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID'])['uniques'].sum().reset_index()
 
 
-# In[10]:
+# In[55]:
 
 
 ################################# adding services
@@ -259,13 +266,13 @@ for service_id, service_children in service_creator.items():
     i += 1
 
 
-# In[11]:
+# In[56]:
 
 
 df[df['PlatformID'].isna()]
 
 
-# In[12]:
+# In[57]:
 
 
 ############################# TESTING start
@@ -294,7 +301,13 @@ test_functions.test_inner_join(main_df, service_details, ['ServiceID'],
 ############################# TESTING end
 
 
-# In[13]:
+# In[58]:
+
+
+df.columns
+
+
+# In[59]:
 
 
 test_step = 'checking hierarchy for reach'
@@ -308,7 +321,7 @@ service_hierarchy_issues = test_functions.test_hierarchy_reach('2_POD_20',
                                                                test_step=test_step)
 
 # TODO share service hierarchy issues 
-
+'''
 # PLATFORM hierarchy issues
 platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='2_POD_21', 
                                                                 mode='Platform', 
@@ -318,29 +331,31 @@ platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='2_P
                                                                 metric_col='uniques',
                                                                 test_step=test_step)
 
-# TODO share Platform hierarchy issues 
+# TODO share Platform hierarchy issues '''
 
 
 # # average weekly reach 
 
-# In[14]:
+# In[60]:
 
 
-test_functions.see_weekly_reach(gam_info, df.sort_values('uniques', ascending=False), 'PlaceID', 'podcast_weekly_country','w/c')
+'''test_functions.see_weekly_reach(gam_info, df.sort_values('uniques', ascending=False), 'PlaceID', 'podcast_weekly_country','w/c')
 test_functions.see_weekly_reach(gam_info, df, 'ServiceID', 'podcast_weekly_service', 'w/c')
 test_functions.see_weekly_reach(gam_info, df, 'PlatformID', 'podcast_weekly_platform', 'w/c')
 test_functions.see_weekly_reach(gam_info, df, 'PlaceID', 'podcast_weekly_country', 'w/c', with_nonNull_filter=True, subset=True, store=True)
+'''
 
 
-# In[15]:
+# In[63]:
 
 
-df.to_excel(f"../data/singlePlatform/output/weekly/{gam_info['file_timeinfo']}_podcast_data_weekly.xlsx", index=None)
+df = df.rename(columns={'uniques': 'Reach'})
+df.to_excel(f"../data/singlePlatform/Podcast/weekly/{gam_info['file_timeinfo']}_podcast_data_weekly.xlsx", index=None)
 
-final_df = df.groupby(['ServiceID', 'PlatformID', 'PlaceID'])['uniques'].sum().reset_index(name='Reach')
+final_df = df.groupby(['ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
 final_df['Reach'] = final_df['Reach'] / gam_info['number_of_weeks']
 
-final_df.to_excel(f"../data/singlePlatform/output/{gam_info['file_timeinfo']}_podcast_reach_annual.xlsx", index=None)
+final_df.to_excel(f"../data/singlePlatform/Podcast/{gam_info['file_timeinfo']}_podcast_reach_annual.xlsx", index=None)
 
 
 # In[ ]:

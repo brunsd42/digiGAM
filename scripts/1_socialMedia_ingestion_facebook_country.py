@@ -101,11 +101,11 @@ sql_query = f"""
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country_redshift_extract.csv"
 
-'''
+
 df = execute_sql_query(sql_query)
 df['fb_page_id'] = df['fb_page_id'].astype(str)
 df.to_csv(file, index=False, na_rep='')
-'''
+
 facebook_country_raw = pd.read_csv(file, keep_default_na=False)
 facebook_country_raw['fb_page_id'] = facebook_country_raw['fb_page_id'].astype(str)
 #facebook_country_raw['fb_metric_end_time'] = pd.to_datetime(facebook_country_raw['fb_metric_end_time'])
@@ -212,6 +212,7 @@ upi_country_weeksTested = upi_country[cols_left].merge(week_tester[cols_right], 
                                                        on= 'week_ending' )
 
 upi_country_weeksTested.sample()
-upi_country_weeksTested.to_csv(f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_COUNTRY.csv", 
+
+upi_country_weeksTested.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_COUNTRY.csv", 
                                index=None)
 

@@ -10,7 +10,7 @@
 1_socialMedia_ingestion_twitter_country.ipynb
 1_socialMedia_ingestion_twitter_engagments.ipynb
 1_socialMedia_ingestion_youtube_analytics.ipynb
-1_socialMedia_ingestion_youtube_redshift_new.ipynb
+1_socialMedia_ingestion_youtube_redshift.ipynb
 2_podcast_processing.ipynb
 2_site_processing.ipynb
 3_site_reach.ipynb

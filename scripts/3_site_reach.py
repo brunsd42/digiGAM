@@ -6,9 +6,11 @@
 
 # # Setup
 
-# In[1]:
+# In[3]:
 
 
+from IPython.display import display
+ 
 from datetime import datetime
 import pandas as pd
 import numpy as np
@@ -22,24 +24,29 @@ import seaborn as sns
 
 # ## import helper
 
-# In[2]:
+# In[4]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
 from config_GAM2025 import gam_info
 
-from functions import joining_allWeeks_perChannel
+#from functions import joining_allWeeks_perChannel
 import test_functions 
 
 
-# In[3]:
+# In[5]:
 
 
 # week 
@@ -58,7 +65,7 @@ service_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Se
 # # Processing
 # 
 
-# In[4]:
+# In[6]:
 
 
 df = pd.read_csv(f"../data/processed/{gam_info['file_timeinfo']}_SiteData.csv", 
@@ -67,13 +74,7 @@ print(df.shape)
 df.sample()
 
 
-# In[5]:
-
-
-msno.matrix(df)
-
-
-# In[6]:
+# In[8]:
 
 
 ################################# adding platforms
@@ -96,7 +97,7 @@ for service in services_to_add_www:
     i+=1
 
 
-# In[7]:
+# In[9]:
 
 
 ################################# remove missing services / places
@@ -111,7 +112,7 @@ df = df[~df['PlaceID'].isna()]
 print(f"no missing countries: {df.shape}")
 
 
-# In[8]:
+# In[10]:
 
 
 #REACH DATA
@@ -124,7 +125,7 @@ reach_data = df[(~df['Space'].str.contains('Devices'))][cols]
 
 
 
-# In[9]:
+# In[11]:
 
 
 ################# Device proportion ~device_type~
@@ -207,7 +208,7 @@ device_factor['GWI Site to People Factor'] = device_factor['Sum_Reach_dedupli']/
 #device_factor.sample()
 
 
-# In[10]:
+# In[12]:
 
 
 # Where GWI factor is not available for WIN, WDI figure is used for both WIN and WWW
@@ -224,7 +225,7 @@ crosstab = pd.crosstab(grouped_df['ServiceID'], grouped_df['PlatformID'],
 display(crosstab[crosstab['WIN'].isna()].sample(5))
 missing_win_services = crosstab[crosstab['WIN'].isna()]['ServiceID'].unique().tolist()
 
-msno.matrix(crosstab)
+#msno.matrix(crosstab)
 
 ############ adding WIN
 start = len(device_factor)
@@ -247,10 +248,10 @@ grouped_df = device_factor_ready.groupby(['PlatformID', 'ServiceID']).agg(
 crosstab = pd.crosstab(grouped_df['ServiceID'], grouped_df['PlatformID'], 
                        values=grouped_df['Avg_GWI_Site_to_People_Factor'], 
                        aggfunc='sum').reset_index()
-msno.matrix(crosstab)
+#msno.matrix(crosstab)
 
 
-# In[11]:
+# In[13]:
 
 
 ################################# adding services to device factor only
@@ -277,20 +278,20 @@ for service in service_additions.keys():
     i += 1
 
 
-# In[12]:
+# In[14]:
 
 
 # add a test for rows occuring only once
 device_factor_ready.groupby(['w/c', 'PlatformID', 'ServiceID']).size()
 
 
-# In[13]:
+# In[15]:
 
 
 # leaving out the replacement of HAUSA with chartbeat data
 
 
-# In[14]:
+# In[16]:
 
 
 # Summing up uniques for each week/service/platform/country
@@ -319,7 +320,7 @@ platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='3_S
                                                                 test_step= test_step)
 
 
-# In[15]:
+# In[17]:
 
 
 file_lookup = {'platform': f"ugly_adjustments/{gam_info['file_timeinfo']}_hierarchy_adjustments_platform.xlsx", 
@@ -343,7 +344,7 @@ def fix_hierarchy_issues(people_df, file_lookup):
     return people_df
 
 
-# In[16]:
+# In[18]:
 
 
 # TODO share Platform hierarchy issues 
@@ -398,7 +399,7 @@ for service_id, service_children in service_creator.items():
     people_df = pd.concat([people_df, temp])
 
 
-# In[17]:
+# In[19]:
 
 
 people_df[(people_df['ServiceID'].isin(['AX2', 'ARA'])) & 
@@ -408,7 +409,7 @@ people_df[(people_df['ServiceID'].isin(['AX2', 'ARA'])) &
 ]
 
 
-# In[18]:
+# In[20]:
 
 
 test_step = 'checking hierarchy for reach'
@@ -435,7 +436,7 @@ platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='3_S
 # TODO share Platform hierarchy issues 
 
 
-# In[19]:
+# In[22]:
 
 
 # FINALS
@@ -465,7 +466,7 @@ test_functions.test_inner_join(main_df, service_codes, ['ServiceID'],
 
 #people_df
 cols = ['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
-people_df[cols].to_csv(f"../data/singlePlatform/output/weekly/{gam_info['file_timeinfo']}_site_reach_weekly.csv")
+people_df[cols].to_csv(f"../data/singlePlatform/site/weekly/{gam_info['file_timeinfo']}_site_reach_weekly.csv")
 
 
 # average bb
@@ -473,34 +474,7 @@ people_df[cols].to_csv(f"../data/singlePlatform/output/weekly/{gam_info['file_ti
 gam_df = people_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
 
 gam_df['Reach'] = gam_df['Reach']/gam_info['number_of_weeks']
-gam_df.to_excel(f"../data/singlePlatform/output/{gam_info['file_timeinfo']}_site_reach_annual.xlsx")
-
-
-# In[20]:
-
-
-people_df[(people_df['PlatformID'] == 'WWW') &
-            (people_df['ServiceID'] == 'GNL') &
-            (people_df['PlaceID'] == 'USA') 
-        ]['Reach'].sum()/gam_info['number_of_weeks']
-
-
-# In[21]:
-
-
-people_df[(people_df['PlatformID'] == 'WWW') &
-            (people_df['ServiceID'] == 'GNL') &
-            (people_df['PlaceID'] == 'USA') 
-        ]['Reach'].mean()
-
-
-# In[22]:
-
-
-gam_df[(gam_df['PlatformID'] == 'WWW') &
-            (gam_df['ServiceID'] == 'GNL') &
-            (gam_df['PlaceID'] == 'USA') 
-        ]
+gam_df.to_excel(f"../data/singlePlatform/site/{gam_info['file_timeinfo']}_site_reach_annual.xlsx")
 
 
 # # analysis 
@@ -514,13 +488,13 @@ gam_df[(gam_df['PlatformID'] == 'WWW') &
 # In[24]:
 
 
-msno.matrix(df_grouped)
+#msno.matrix(df_grouped)
 heatmap_data = df_grouped.pivot_table(index='PlatformID', columns='ServiceID', values='m_unique_visitors', aggfunc='sum')
 
-plt.figure(figsize=(10, 8))
-sns.heatmap(heatmap_data, fmt="g", cmap="viridis")
-plt.title('Heatmap of Unique Visitors by ServiceID and PlatformID')
-plt.show()
+#plt.figure(figsize=(10, 8))
+#sns.heatmap(heatmap_data, fmt="g", cmap="viridis")
+#plt.title('Heatmap of Unique Visitors by ServiceID and PlatformID')
+#plt.show()
 
 
 # In[25]:
@@ -543,31 +517,16 @@ df_grouped[(df_grouped['PlaceID'] == 'IND') &
 # In[27]:
 
 
-msno.matrix(people_df)
+#msno.matrix(people_df)
 heatmap_data = people_df.pivot_table(index='PlatformID', 
                                      columns='ServiceID', 
                                      values='m_unique_visitors', 
                                      aggfunc='sum')
 
-plt.figure(figsize=(10, 8))
-sns.heatmap(heatmap_data, fmt="g", cmap="viridis")
-plt.title('Heatmap of Unique Visitors by ServiceID and PlatformID')
-plt.show()
-
-
-# In[28]:
-
-
-people_df[(people_df['PlaceID'] == 'IND') & 
-            (people_df['ServiceID'] == 'HIN') #& 
-#            (people_df['Week Number'] == 23)
-]
-
-
-# In[29]:
-
-
-6336004.14/(6050922.91+285244.72)
+#plt.figure(figsize=(10, 8))
+#sns.heatmap(heatmap_data, fmt="g", cmap="viridis")
+#plt.title('Heatmap of Unique Visitors by ServiceID and PlatformID')
+#plt.show()
 
 
 # In[ ]:

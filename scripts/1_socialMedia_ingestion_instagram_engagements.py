@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[9]:
 
 
 platformID = 'INS'
 
 
-# In[2]:
+# In[10]:
 
 
 from datetime import datetime
@@ -20,14 +20,19 @@ import psycopg2
 
 # ## import helper 
 
-# In[3]:
+# In[11]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
@@ -37,7 +42,7 @@ from functions import execute_sql_query
 import test_functions 
 
 
-# In[22]:
+# In[12]:
 
 
 # country
@@ -49,14 +54,15 @@ week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 week_tester['week_ending'] = pd.to_datetime(week_tester['week_ending'])
 
 # social media accounts
-socialmedia_accounts = pd.read_excel("helper/ins_account_lookup.xlsx")
+socialmedia_accounts = pd.read_excel("../helper/ins_account_lookup.xlsx")
+channel_ids = socialmedia_accounts['Channel ID'].tolist()
 
 
 # # ingestion
 
 # # activity
 
-# In[5]:
+# In[13]:
 
 
 metric_ids = ['saved', 
@@ -97,7 +103,7 @@ df['ig_media_id'] = df['ig_media_id'].astype(str)
 df.to_csv(file, index=False, na_rep='')
 
 
-# In[6]:
+# In[14]:
 
 
 ig_views = pd.read_csv(file, keep_default_na=False)
@@ -121,7 +127,7 @@ test_functions.test_weeks_presence('week_ending',
 
 # # metadata
 
-# In[7]:
+# In[15]:
 
 
 sql_query = f""" 
@@ -166,7 +172,7 @@ ig_metadata.sample()
 
 # # combine media metrics and their metadata
 
-# In[8]:
+# In[16]:
 
 
 ig_views = ig_views.rename(columns={'ig_metric_end_time': 'week_ending'})
@@ -183,7 +189,7 @@ ig_combine.columns
 
 # ## processing
 
-# In[9]:
+# In[17]:
 
 
 # to get to account level 
@@ -212,7 +218,7 @@ test_functions.test_duplicates(ig_media_to_user, ['ig_user_id', 'week_ending'],
 
 
 
-# In[ ]:
+# In[18]:
 
 
 '''# join week lookup per channel 
@@ -252,7 +258,7 @@ ig_media_to_user_allWeeks = joining_allWeeks_perChannel(ig_media_to_user, 'week_
                                                        )'''
 
 
-# In[ ]:
+# In[19]:
 
 
 '''
@@ -268,7 +274,7 @@ test_functions.see_channel_week_heatmap(ig_media_to_user_allWeeks, columns_to_vi
 
 # ## user insights
 
-# In[10]:
+# In[20]:
 
 
 # account level (would also contain content level but we don't what this here wil be replaced )
@@ -315,7 +321,7 @@ test_functions.test_weeks_presence('week_ending', ig_userInsights.rename(columns
 ig_userInsights.sample()
 
 
-# In[11]:
+# In[21]:
 
 
 # Pivot the DataFrame
@@ -345,7 +351,7 @@ ig_user_by_userInsights_allWeeks = joining_allWeeks_perChannel(ig_user_by_userIn
 
 # # combine 
 
-# In[14]:
+# In[22]:
 
 
 # excluded from left 'impressions', 'reach'
@@ -368,7 +374,7 @@ test_functions.test_inner_join(ig_media_to_user[left_cols],
 
 # # user metadata redshift query 
 
-# In[15]:
+# In[23]:
 
 
 sql_query = f""" 
@@ -417,7 +423,7 @@ test_functions.test_weeks_presence('week_ending', ig_userMetadata,
 ig_userMetadata.sample()
 
 
-# In[16]:
+# In[24]:
 
 
 # just a clean list of the overview columns 
@@ -430,7 +436,7 @@ ig_userMetadata_slim = ig_userMetadata[cols].drop_duplicates()
 ig_userMetadata_slim.shape
 
 
-# In[51]:
+# In[25]:
 
 
 # combine all
@@ -450,7 +456,7 @@ ig_combine_final.to_csv(f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{
 
 # ### milestone II
 
-# In[74]:
+# In[26]:
 
 
 ig_engagements = ig_combine_final.merge(week_tester[['week_ending', 'w/c']], on='week_ending', how='left')
@@ -484,7 +490,7 @@ ig_engagements['Channel ID'] = ig_engagements['Channel ID_x'].fillna('Channel ID
 ig_engagements = ig_engagements.drop(columns=['Channel ID_x', 'Channel ID_y'])
 
 
-# In[75]:
+# In[27]:
 
 
 ig_engagements_name_matched = ig_engagements[ig_engagements['_merge'] == 'both']
@@ -514,7 +520,7 @@ ig_engagements_final.to_csv(f"../data/processed/{platformID}/{gam_info['file_tim
 
 # ### Milestone III
 
-# In[76]:
+# In[28]:
 
 
 # Define the multiplier mapping

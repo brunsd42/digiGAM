@@ -1,37 +1,44 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
-
-
-import pandas as pd
-
-
 # In[1]:
 
 
-import sys
-from pathlib import Path
+from IPython.display import display
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
-sys.path.insert(0, str(helper_path))
-
-# Now import your modules 
-from config_GAM2025 import gam_info
-import functions
+import pandas as pd
 
 
 # In[2]:
 
 
+import sys
+from pathlib import Path
+
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
+sys.path.insert(0, str(helper_path))
+
+# Now import your modules
+from config_GAM2025 import gam_info
+import functions
+
+
+# In[3]:
+
+
 # Load country mapping
-country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YouTube Codes']]
+country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
 # Load country mapping
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
 
-# In[3]:
+# In[4]:
 
 
 # Utility functions
@@ -53,7 +60,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[4]:
+# In[5]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -111,7 +118,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[5]:
+# In[6]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, threshold=0.0001):
@@ -166,7 +173,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[13]:
+# In[7]:
 
 
 # Dataset configuration
@@ -195,7 +202,7 @@ datasets = [
 ]
 
 
-# In[14]:
+# In[8]:
 
 
 # Execute comparisons

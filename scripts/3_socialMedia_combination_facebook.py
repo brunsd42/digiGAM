@@ -25,8 +25,6 @@ import numpy as np
 
 import re
 
-import yxdb
-
 import missingno as msno
 import matplotlib.pyplot as plt
 import seaborn as sns 
@@ -51,12 +49,6 @@ from config_GAM2025 import gam_info
 
 from functions import execute_sql_query
 import test_functions
-
-
-# In[53]:
-
-
-gam_info['lookup_file']
 
 
 # In[54]:
@@ -92,7 +84,7 @@ socialmedia_accounts.dtypes
 # In[55]:
 
 
-facebook_engagements_reach = pd.read_csv(f"../data/processed/FBE/{gam_info['file_timeinfo']}_FBE_REDSHIFT.csv",)
+facebook_engagements_reach = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv",)
 facebook_engagements_reach['w/c'] = pd.to_datetime(facebook_engagements_reach['w/c'])
 facebook_engagements_reach['Channel ID'] = facebook_engagements_reach['Channel ID'].apply(lambda x: str(int(x)))
 

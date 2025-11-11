@@ -1,9 +1,15 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# In[30]:
+
+
+platformID = 'YT-'
+
+
 # ## import libraries
 
-# In[1]:
+# In[31]:
 
 
 import os
@@ -19,7 +25,7 @@ import numpy as np
 
 import re
 
-import yxdb
+#import yxdb
 
 import missingno as msno
 import matplotlib.pyplot as plt
@@ -30,16 +36,22 @@ import psycopg2
 
 # ## import helper 
 
-# In[2]:
+# In[32]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
+# Now import your modules 
 # Now import your modules 
 from config_GAM2025 import gam_info
 
@@ -47,13 +59,7 @@ from functions import execute_sql_query
 import test_functions
 
 
-# In[3]:
-
-
-gam_info['lookup_file']
-
-
-# In[4]:
+# In[33]:
 
 
 # country
@@ -70,7 +76,7 @@ dtype_dict = {'Channel ID': 'str',
 socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
                                      sheet_name='Social Media Accounts new')
 
-socialmedia_accounts = socialmedia_accounts[(socialmedia_accounts['Platform'] == 'Youtube')
+socialmedia_accounts = socialmedia_accounts[(socialmedia_accounts['PlatformID'] == platformID)
                                             & 
                                             (socialmedia_accounts['Status'] == 'active')]
 socialmedia_accounts = socialmedia_accounts.rename(columns={'Excluding UK': 'Channel Group'})
@@ -86,10 +92,10 @@ socialmedia_accounts.sample()
 
 # ### automated extracts
 
-# In[5]:
+# In[34]:
 
 
-main_path = f"../data/raw/YouTube/{gam_info['file_timeinfo']}_export/"
+main_path = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_export/"
 #main_path = f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/"
 
 # Dynamically get all folders in the main_path
@@ -99,11 +105,11 @@ folder_paths = [f for f in os.listdir(main_path) if os.path.isdir(os.path.join(m
 test_functions.youtube_test_input_files('1_YT_1', folder_paths, main_path, week_tester, test_step='testing automated extracts')
 
 
-# In[6]:
+# In[35]:
 
 
 # ingest files
-output_csv_path = f"../data/processed/Youtube/{gam_info['file_timeinfo']}_zipfiles_BBC World Service.csv"
+output_csv_path = f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_zipfiles_BBC World Service.csv"
 
 # Check if the output CSV already exists
 if os.path.exists(output_csv_path):
@@ -159,6 +165,10 @@ combined_df.loc[:, 'Unique viewers'] = pd.to_numeric(combined_df['Unique viewers
 combined_df.loc[:, 'Views'] = pd.to_numeric(combined_df['Views'].fillna(0), errors='raise').astype('Int64')
 combined_df.loc[:, 'Watch time (hours)'] = pd.to_numeric(combined_df['Watch time (hours)'], errors='raise')
 
+
+# In[36]:
+
+
 # TODO: find out from Minnie why Impressions and Impression click-through rate (%) is not in this dataset -> can be ignored
 try:
     combined_df.loc[:, 'Impressions'] = combined_df['Impressions'].fillna(0)
@@ -174,23 +184,16 @@ except:
 combined_df.sample()
 
 
-# In[7]:
-
-
-combined_df[(combined_df['Channel ID'] == 'UC16niRr50-MSBwiO3YDb3RA') & 
-            (combined_df['w/c'] == '2024-04-01')]
-
-
 # ### manual extracts
 # Media Action and channel by channel exports 
 
-# In[8]:
+# In[37]:
 
 
 #TODO: review with minnie for individual exports
 #because it contains geography or should we use table instead?
 
-path = f"../data/raw/Youtube/{gam_info['file_timeinfo']}_manual/"
+path = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_manual/"
 dataframes = []
 
 for filename in os.listdir(path):
@@ -231,7 +234,7 @@ media_action_df['Channel ID'] = media_action_df['Channel ID'].replace(channel_id
 media_action_df['Unique viewers'] = media_action_df['Views'] / gam_info['overlap_viewer_uniqueViever']
 
 
-# In[9]:
+# In[38]:
 
 
 gam_info['overlap_viewer_uniqueViever']
@@ -239,7 +242,7 @@ gam_info['overlap_viewer_uniqueViever']
 
 # ### combine CMS & non CMS
 
-# In[10]:
+# In[39]:
 
 
 full_uv_df = pd.concat([combined_df, media_action_df])
@@ -261,7 +264,7 @@ youtube_uv.drop(columns=['week_ending'], inplace=True)
 
 # ## Test 
 
-# In[11]:
+# In[40]:
 
 
 ################################### Testing ################################### 
@@ -281,7 +284,7 @@ test_functions.test_merge_row_count(youtube_uv, full_uv_df, '1_YT_5', test_step)
 youtube_uv.sample()
 
 
-# In[17]:
+# In[41]:
 
 
 youtube_uv[youtube_uv['Channel ID'] == 'UCyL1hGLVGqeZ1ak3DJeik7Q']
@@ -289,7 +292,7 @@ youtube_uv[youtube_uv['Channel ID'] == 'UCyL1hGLVGqeZ1ak3DJeik7Q']
 
 # ## Storing
 
-# In[12]:
+# In[42]:
 
 
 cols = ['Channel ID', 'Channel Name', 'ServiceID', 'Channel Group',
@@ -302,18 +305,18 @@ youtube_uv['Channel ID'] = youtube_uv['Channel ID'].str.strip().fillna('')
 youtube_uv['Unique viewers'] = youtube_uv['Unique viewers'].fillna(0)
 youtube_uv['w/c'] = pd.to_datetime(youtube_uv['w/c'])
 
-youtube_uv.to_csv(f"../data/processed/YouTube/_{gam_info['file_timeinfo']}_uniqueViewer_withAds.csv", 
+youtube_uv.to_csv(f"../data/processed/{platformID}/_{gam_info['file_timeinfo']}_uniqueViewer_withAds.csv", 
                          index=None)
 
 
 # ## remove Advertising 
 
-# In[13]:
+# In[43]:
 
 
 # read in ad dataset
 cols = ['Channel', 'Week', '% reach to be removed']
-youtube_ads = pd.read_excel(f"../data/raw/Youtube/YouTube_advertising.xlsx", usecols=cols)
+youtube_ads = pd.read_excel(f"../data/raw/{platformID}/YouTube_advertising.xlsx", usecols=cols)
 youtube_ads.rename(columns={'Channel': 'Channel ID', 
                             'Week': 'w/c'}, inplace=True)
 
@@ -330,7 +333,7 @@ youtube_uv_organic.head()
 
 # ## Testing 
 
-# In[14]:
+# In[44]:
 
 
 # Get a rough estimate of channel average UV and sort descending by average UV
@@ -341,7 +344,7 @@ channel_avg_uv = youtube_uv_organic.groupby(['Channel ID', 'ServiceID'])['Unique
 ## TODO make heatmap
 
 
-# In[15]:
+# In[45]:
 
 
 # Calculate the sum of unique viewers for each YT Service Code and Week Number
@@ -358,9 +361,9 @@ avg_uv = youtube_uv_organic.groupby(['ServiceID'])['Unique viewers'].mean()\
 
 # # storing dataset
 
-# In[16]:
+# In[46]:
 
 
-youtube_uv_organic.to_csv(f"../data/processed/YouTube/{gam_info['file_timeinfo']}_uniqueViewer.csv", 
+youtube_uv_organic.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer.csv", 
                          index=None)
 

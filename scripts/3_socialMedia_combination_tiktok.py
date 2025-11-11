@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
+
+from IPython.display import display 
 
 import base64
 import json
@@ -19,17 +21,22 @@ import ast
 from sympy import symbols, solve, lambdify
 
 
-# In[ ]:
+# In[2]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
-# Now import your modules 
+# Now import your modules
 from config_GAM2025 import gam_info
 
 from security_config import emplifi_key
@@ -37,15 +44,20 @@ from functions import execute_sql_query
 import test_functions
 
 
-# In[ ]:
+# In[3]:
 
 
 platformID = 'TTK'
 
 # country
-cols = ['PlaceID',	'TikTok Codes']
+cols = ['PlaceID',	'TikTok Codes', gam_info['population_column']]
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", 
                               sheet_name='CountryID', usecols=cols, keep_default_na=False )
+
+# service
+cols = ['ServiceID', 'Lumen']
+service_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", 
+                              sheet_name='ServiceID', usecols=cols, keep_default_na=False )
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
@@ -72,7 +84,7 @@ socialmedia_accounts.sample()
 
 # # read in 
 
-# In[ ]:
+# In[4]:
 
 
 dataframes = []
@@ -106,7 +118,7 @@ else:
     print("🚫 No valid data found to combine.")
 
 
-# In[ ]:
+# In[5]:
 
 
 post_level_df = post_level_df.rename(columns={'platformID': 'PlatformID'})
@@ -131,12 +143,12 @@ pivot_df = post_level_df.pivot_table(columns='profile_id', index='w/c', aggfunc=
 #pivot_df = pivot_df.astype(bool)
 
 # Visualize missing data
-msno.matrix(pivot_df)
-plt.title("Missing Weeks per TikTok Profile")
-plt.show()
+#msno.matrix(pivot_df)
+#plt.title("Missing Weeks per TikTok Profile")
+#plt.show()
 
 
-# In[ ]:
+# In[6]:
 
 
 def extract_author_info(row):
@@ -160,19 +172,12 @@ def extract_author_info(row):
     })
 
 # Apply the function
-
 post_level_df[["Channel ID", "Channel Name", "Channel URL"]] = post_level_df['author'].apply(extract_author_info)
-
-
-# In[ ]:
-
-
-post_level_df.columns
 
 
 # # Views
 
-# In[ ]:
+# In[7]:
 
 
 minnie_cols_used = {'Date': 'w/c', #minnie has a day by day breakdown and then calculates the average
@@ -204,7 +209,7 @@ views_df['content_id'] = views_df['link'].str.split('/').str[-1].str.split('?').
 views_df.head()
 
 
-# In[ ]:
+# In[8]:
 
 
 # optional: test video length is all in seconds
@@ -217,7 +222,7 @@ cols_fill_nan = ['insights_avg_time_watched', 'duration', 'insights_reach',
 views_df[cols_fill_nan] = views_df[cols_fill_nan].fillna(0)  # or any other value you'd like
 
 
-# In[ ]:
+# In[9]:
 
 
 # Define x and y values for each row
@@ -302,7 +307,7 @@ views_df['final_video_views'] = np.select(conditions, choices,
                                             default=views_df['30sec_video_views'])
 
 
-# In[ ]:
+# In[10]:
 
 
 views_df = views_df.merge(socialmedia_accounts[["Channel ID", "ServiceID", "Linked FB Account"]], 
@@ -320,26 +325,58 @@ comparison = completed > thirty_sec
 print(comparison)  # Should be False
 
 
-# In[ ]:
+# In[11]:
 
 
 cols = ['content_id', 'ServiceID', 'Channel ID', 'Channel Name', 'w/c', 
         'link',
         'final_video_views', 'Linked FB Account'
        ]
-views_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_views.csv",
+views_df = views_df[cols]
+views_df.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_views.csv",
                        index=None)
+
+
+# In[12]:
+
+
+# YT views per viewer is missing for media action 
+yt_views_per_viewer = pd.read_excel("../helper/YT views per viewer_TTKhelper.xlsx")[['w/c', 'Service', 'Value']]
+yt_views_per_viewer = yt_views_per_viewer.rename(columns={'Service': 'Lumen', 'Value': 'views_per_viewer'})
+yt_views_per_viewer = yt_views_per_viewer.merge(service_codes, on='Lumen', how='left').drop(columns='Lumen')
+yt_views_per_viewer.sample()
+
+
+# In[13]:
+
+
+views_df['w/c'] = pd.to_datetime(views_df['w/c'])
+yt_views_per_viewer['w/c'] = pd.to_datetime(yt_views_per_viewer['w/c'])
+
+views_df_yt = views_df.merge(yt_views_per_viewer, on=['ServiceID', 'w/c'], how='left', indicator=True)
+
+matched = views_df_yt[views_df_yt['_merge'] == 'both'].drop(columns='_merge')
+unmatched = views_df_yt[views_df_yt['_merge'] == 'left_only'].drop(columns=['_merge', 'views_per_viewer'])
+
+views_per_viewer_by_service = yt_views_per_viewer.groupby(['ServiceID'])['views_per_viewer'].mean().reset_index()
+
+matched_sec = unmatched.merge(views_per_viewer_by_service, on='ServiceID', how='left', indicator=True)
+matched_sec = matched_sec[matched_sec['_merge'] == 'both'].drop(columns='_merge')
+
+views_scaled = pd.concat([matched, matched_sec])
+views_scaled['engaged_users'] = views_scaled['final_video_views']/(views_scaled['views_per_viewer']*1.14)
+views_scaled.columns
 
 
 # # Country 
 
-# In[ ]:
+# In[14]:
 
 
 country_df = post_level_df.copy()
 
 
-# In[ ]:
+# In[15]:
 
 
 # Step 1: Parse the stringified list of country-percentage dictionaries
@@ -362,10 +399,9 @@ exploded_df[['country', 'percentage']] = exploded_df['parsed_viewers'].apply(
 exploded_df.drop(columns=['parsed_viewers'], inplace=True)
 exploded_df['country'] = exploded_df['country'].replace('Others', 'ZZ')
 exploded_df['country'] = exploded_df['country'].fillna('ZZ')
-exploded_df.head()
 
 
-# In[ ]:
+# In[16]:
 
 
 exploded_df = exploded_df.rename(columns={'country': 'TikTok Codes'})
@@ -376,40 +412,38 @@ print(f"mismatches? \n{ttk_country._merge.value_counts()}")
 ttk_country = ttk_country.drop(columns='_merge')
 
 
-# In[ ]:
+# In[17]:
 
 
-ttk_country.columns
-
-
-# In[ ]:
-
-
-country_cols = ['Channel ID', 'link', 'PlaceID', 'percentage', 'w/c', 'platformID']
-ttk_country[country_cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country.csv",
+country_cols = ['Channel ID', 'link', 'PlaceID', 'percentage', 'w/c', 'PlatformID']
+ttk_country= ttk_country[country_cols]
+ttk_country.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country.csv",
                   index=None, na_rep='')
 
 
 # # combine views & country
 
-# In[ ]:
+# In[19]:
 
 
 # post_url: link
+ttk_country['w/c'] = pd.to_datetime(ttk_country['w/c'])
 
-ttk_data = ttk_country.merge(views_df, on=['Channel ID', 'link', 'w/c'], how='outer',
+ttk_country = ttk_country.drop(columns=['_merge'], errors='ignore')
+views_scaled = views_scaled.drop(columns=['_merge'], errors='ignore')
+
+ttk_data = ttk_country.merge(views_scaled, on=['Channel ID', 'link', 'w/c'], how='outer',
                                 indicator=True)
 print(f"mismatches between datasets! unreviewed yet\n {ttk_data._merge.value_counts()}")
-
 ttk_data = ttk_data.drop(columns=['_merge'])
 
 ttk_data['country_views'] = ttk_data["final_video_views"] * ttk_data["percentage"]
-ttk_perCountry = ttk_data.groupby(['w/c', 'Channel ID', 
+ttk_perCountry = ttk_data.groupby(['w/c', 'Channel ID', 'ServiceID',
                                 'PlaceID'])['country_views'].sum().rename('country').reset_index()
-ttk_global = ttk_data.groupby(['w/c', 'Channel ID', 
+ttk_global = ttk_data.groupby(['w/c', 'ServiceID','Channel ID', 
                               ])['country_views'].sum().rename('global').reset_index()
 
-ttk_df = ttk_perCountry.merge(ttk_global, on=['Channel ID', 'w/c'], how='outer', 
+ttk_df = ttk_perCountry.merge(ttk_global, on=['ServiceID', 'w/c', 'Channel ID'], how='outer', 
                            indicator=True)
 print(f"no mismatches \n {ttk_df._merge.value_counts()}")
 ttk_df = ttk_df.drop(columns=['_merge'])
@@ -418,13 +452,13 @@ ttk_df['country_%'] = ttk_df['country']/ttk_df['global']
 ttk_df.head()
 
 
-# In[ ]:
+# In[20]:
 
 
-annual_ttk_country = ttk_df.groupby(['Channel ID', 'PlaceID'])['country_%'].mean().rename('AvgCountry%').reset_index()
-annual_ttk_global = annual_ttk_country.groupby(['Channel ID' ])['AvgCountry%'].sum().rename('AvgGlobal%').reset_index()
+annual_ttk_country = ttk_df.groupby(['Channel ID', 'ServiceID', 'PlaceID'])['country_%'].mean().rename('AvgCountry%').reset_index()
+annual_ttk_global = annual_ttk_country.groupby(['Channel ID', 'ServiceID' ])['AvgCountry%'].sum().rename('AvgGlobal%').reset_index()
 
-annual_ttk_df = annual_ttk_country.merge(annual_ttk_global, on='Channel ID', how='outer', indicator=True)
+annual_ttk_df = annual_ttk_country.merge(annual_ttk_global, on=['Channel ID', 'ServiceID'], how='outer', indicator=True)
 print(f"no mismatches \n {annual_ttk_df._merge.value_counts()}")
 annual_ttk_df = annual_ttk_df.drop(columns=['_merge'])
 
@@ -434,10 +468,30 @@ annual_ttk_df.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']
                        index=None)
 
 
-# In[ ]:
+# In[21]:
 
 
-annual_ttk_df[annual_ttk_df['Channel ID'] == '1f2dfe12-0863-482d-9b25-9d7dec3556cc']
+temp = annual_ttk_df.merge(country_codes[['PlaceID', gam_info['population_column']]],
+                           on='PlaceID', how='left', indicator=True)
+temp['_merge'].value_counts()
+temp = temp.drop(columns='_merge')
+
+temp = temp[temp['PlaceID'] != 'UNK']
+temp_grouped = temp.groupby(['Channel ID', 'ServiceID'])['country_%'].sum().rename('sum_country_%').reset_index()
+
+temp2 = temp.merge(temp_grouped, on=['Channel ID', 'ServiceID'], how='outer', indicator=True)
+temp2._merge.value_counts()
+temp2 = temp2.drop(columns='_merge')
+
+temp2['country_%'] = temp2['country_%'] / temp2['sum_country_%']
+
+temp3 = temp2.merge(views_scaled, on=['Channel ID', 'ServiceID'], how='outer', indicator=True)
+temp3['uv_by_country'] =  temp3['engaged_users'] * temp3['country_%']
+
+
+cols = ['w/c', 'PlaceID', 'ServiceID', 'Channel ID', 'uv_by_country', ]
+temp3[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv", 
+                     index=None)
 
 
 # In[ ]:

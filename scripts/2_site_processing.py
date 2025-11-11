@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[13]:
 
+
+from IPython.display import display
 
 from datetime import datetime
 import pandas as pd
@@ -24,14 +26,19 @@ import missingno as msno
 
 # ## import helper
 
-# In[2]:
+# In[14]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
@@ -42,7 +49,7 @@ import test_functions
 import functions
 
 
-# In[3]:
+# In[15]:
 
 
 # country
@@ -76,7 +83,7 @@ non_js_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_
 app_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_App')
 
 
-# In[4]:
+# In[16]:
 
 
 full_df = pd.read_csv(f"../data/raw/{gam_info['file_timeinfo']}_rawDataFromPiano.csv", dtype={'Report No.': str})
@@ -84,21 +91,9 @@ full_df.drop(columns=['m_page_loads', 'src', 'Description'], inplace=True)
 full_df['app_name'] = full_df['app_name'].astype(str)
 
 
-# In[5]:
-
-
-full_df[full_df['Report No.'] == '100']
-
-
 # ## setup for platform processing
 
-# In[6]:
-
-
-msno.matrix(full_df)
-
-
-# In[7]:
+# In[19]:
 
 
 # TO DO somewhere here the column device_type has it's nan values replaced with nan -where and why? 
@@ -184,19 +179,7 @@ df.drop(columns=['ServiceID_y', '_merge'], inplace=True)
 print(f"5: {df.shape}")
 
 
-# In[8]:
-
-
-df[df['ServiceID'].isna() & df['app_name'].notna() & (df['app_name'] != '')][['Report No.', '']].unique()
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
+# In[20]:
 
 
 ################ ADD SERVICE BASED ON app_name
@@ -239,13 +222,7 @@ test_functions.test_join_rowCount(df, country_codes[cols], ['geo_country'],
 df = df.merge(country_codes[cols], on='geo_country', how='left')
 
 
-# In[ ]:
-
-
-df['Report No.'].unique()
-
-
-# In[ ]:
+# In[22]:
 
 
 ################ ADD PLATFORM TO STUDIOS
@@ -254,7 +231,7 @@ df['Report No.'].unique()
 df.loc[df['PlatformID'].isna() & (df['ServiceID'] == 'WOR'), 'PlatformID'] = 'WDI'
 
 
-# In[ ]:
+# In[23]:
 
 
 # Specify the dtype option to avoid DtypeWarning for columns with mixed types
@@ -298,7 +275,7 @@ msno.matrix(df)
 df.to_csv(f"../data/processed/{gam_info['file_timeinfo']}_DataFromPiano.csv", index=None)
 
 
-# In[ ]:
+# In[25]:
 
 
 # GLOBAL NEWS PARTNERS 
@@ -348,13 +325,7 @@ test_functions.test_inner_join(main_df, service_codes, ['ServiceID'],
 df_gnl = pd.concat([df, gnl_weekly_win, gnl_weekly_www])
 
 
-# In[ ]:
-
-
-msno.matrix(df_gnl)
-
-
-# In[ ]:
+# In[27]:
 
 
 # LEARNING ENGLISH PARTNERS
@@ -390,23 +361,11 @@ test_functions.test_inner_join(main_df, service_codes, ['ServiceID'],
 df_gnl_le = pd.concat([df_gnl, le_partner])
 
 
-# In[ ]:
-
-
-msno.matrix(df_gnl_le)
-
-
-# In[ ]:
+# In[28]:
 
 
 cols = ['Space', 'YearGAE', 'w/c', 'm_unique_visitors', 'device_type', 'ServiceID', 'PlatformID', 'PlaceID']
 df_gnl_le[cols].to_csv(f"../data/processed/{gam_info['file_timeinfo']}_SiteData.csv", index=None)
-
-
-# In[ ]:
-
-
-df_gnl_le['Report No.'].unique()
 
 
 # In[ ]:

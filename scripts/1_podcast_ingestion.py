@@ -7,6 +7,8 @@
 from datetime import datetime
 import pandas as pd
 
+from IPython.display import display
+
 
 # ## import helper
 
@@ -69,7 +71,7 @@ def generate_when_clauses(df):
 def execute_sql_query_with_output(sql_query, file_timeinfo, output_filename):
     df = execute_sql_query(sql_query)
     if df is not None:
-        display(df.head())
+        print(df.head())
         
     df.to_csv(f"../data/raw/podcast/{file_timeinfo}_{output_filename}.csv", index=False)
     
@@ -161,7 +163,7 @@ sql_query_2 = f"""
 
 podcast_raw = execute_sql_query_with_output(sql_query_2, gam_info['file_timeinfo'], 'podcast_individualLanguages_redshift_extract')
 podcast_raw.rename(columns={'week': 'w/c'}, inplace=True)
-display(podcast_raw.sample())
+#display(podcast_raw.sample())
 
 ################################### Testing ################################### 
 test_step = 'sql returns for individual language services'
@@ -214,7 +216,7 @@ sql_query_3 = f"""
 
 podcast_total_wsl = execute_sql_query_with_output(sql_query_3, gam_info['file_timeinfo'], 'podcast_totalWSL_redshift_extract')
 podcast_total_wsl.rename(columns={'week': 'w/c'}, inplace=True)
-display(podcast_total_wsl.sample())
+#display(podcast_total_wsl.sample())
 #wpodcast_test_services_in_results(podcast_total_wsl, total_wsl)
 ################################### Testing ################################### 
 test_step = 'sql returns for WSL'
@@ -266,7 +268,7 @@ sql_query = f"""
 
 podcast_total_ws = execute_sql_query_with_output(sql_query, gam_info['file_timeinfo'], 'podcast_totalWS_redshift_extract')
 podcast_total_ws.rename(columns={'week': 'w/c'}, inplace=True)
-display(podcast_total_wsl.sample())
+#display(podcast_total_wsl.sample())
 
 ################################### Testing ################################### 
 test_step = 'sql returns for WS'
@@ -316,7 +318,7 @@ sql_query = f"""
 
 podcast_total_allBBC = execute_sql_query_with_output(sql_query, gam_info['file_timeinfo'], 'podcast_allBBC_redshift_extract')
 podcast_total_allBBC.rename(columns={'week': 'w/c'}, inplace=True)
-display(podcast_total_wsl.sample())
+#display(podcast_total_wsl.sample())
 
 ################################### Testing ################################### 
 test_step = 'sql returns for all BBC'

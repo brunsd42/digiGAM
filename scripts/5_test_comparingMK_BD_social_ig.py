@@ -1,27 +1,34 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[44]:
 
 
 platformID = 'INS'
 
 
-# In[ ]:
+# In[45]:
 
 
 import pandas as pd
 import numpy as np
 
+from IPython.display import display
 
-# In[2]:
+
+# In[46]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
@@ -29,7 +36,7 @@ from config_GAM2025 import gam_info
 import functions
 
 
-# In[4]:
+# In[47]:
 
 
 # Load country mapping
@@ -50,7 +57,7 @@ channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
 
 
-# In[13]:
+# In[48]:
 
 
 # Utility functions
@@ -72,7 +79,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[32]:
+# In[49]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -136,7 +143,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[33]:
+# In[50]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, threshold=0.0001):
@@ -191,7 +198,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[113]:
+# In[51]:
 
 
 # Dataset configuration
@@ -199,7 +206,7 @@ datasets = [
     {
         "name": "Instagram Country - raw",
         "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/data/final data/IG_GAM2025_REDSHIFT_geog.xlsx",
-        "new_path": f"../data/raw/INS/{gam_info['file_timeinfo']}_INS_REDSHIFT_geog.xlsx",
+        "new_path": f"../data/raw/INS/{gam_info['file_timeinfo']}_INS_REDSHIFT_geog.csv",
         "column_mapping": 
         {
             'ig_user_id': 'ig_user_id', 
@@ -225,7 +232,7 @@ datasets = [
         "new_path": f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_geog.csv",
         "column_mapping": 
         {
-            'IG Platform Account ID': 'IG Account ID', 
+            'IG Platform Account ID': 'Channel ID', 
             #'IG Account Name': 'Channel Name',
             'fb_metric_breakdown': 'ig_metric_breakdown',
             'Week Commencing': 'w/c',
@@ -291,7 +298,7 @@ datasets = [
             'IG Account ID': 'Channel ID',
             'Week Commencing': 'w/c',
             'PLACEID1': 'PlaceID',
-            'IG Reach by country': 'Reach'
+            'IG Reach by country': 'uv_by_country'
         },
         "key_columns": ['Channel ID', 'PlaceID', 'w/c'],
         "method": "integer",
@@ -305,10 +312,326 @@ datasets = [
                         however trying to use these as inputs in instagram_domi.yxmd failed. 
         '''
     },
+    {
+        "name": "Instagram ALL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - ALL by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_ALLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram ANW Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - ANW by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_ANWbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram ANY Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - ANY by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_ANYbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram AX2 Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - AX2 by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_AX2byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram AXE Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - AXE by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_AXEbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram EN2 Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - EN2 by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_EN2byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram ENG Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - ENG by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_ENGbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram ENW Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - ENW by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_ENWbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram FOA Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - FOA by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_FOAbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram GNL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - GNL by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_GNLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram MA- Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - MA by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_MA-byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram TOT Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - TOT by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_TOTbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram WOR Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - WOR by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_WORbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram WSE Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - WSE by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_WSEbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Instagram WSL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Instagram - WSL by country.xlsx",
+        "new_path": f"../data/singlePlatform/INS/weekly/GAM2025_WEEKLY_INS_WSLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+
 ]
 
 
-# In[150]:
+# In[55]:
 
 
 # Execute comparisons
@@ -368,11 +691,19 @@ for ds in datasets:
     print("Rows missing from new:")
     display(missing)
     print("Rows with differences:")
-    if len(different) > 0:
-        different['diff'] = different['Reach_orig'] - different['Reach_new']
-        display(different.sort_values('diff', ascending=False))
-    else:
-        display(different)
+    if not different.empty:
+        numeric_cols = [col for col in different.columns if col.endswith('_orig') and pd.api.types.is_numeric_dtype(different[col])]
+    
+        for col in numeric_cols:
+            base_col = col.replace('_orig', '')
+            new_col = f"{base_col}_new"
+            diff_col = f"{base_col}_diff"
+            if new_col in different.columns:
+                different[diff_col] = different[col] - different[new_col]
+        
+            display(different.sort_values(by=[col for col in different.columns if col.endswith('_diff')][0], ascending=False))
+        else:
+            display(different)
 
 
 # In[ ]:

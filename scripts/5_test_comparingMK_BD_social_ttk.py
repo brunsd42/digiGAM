@@ -1,43 +1,50 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[13]:
+# In[66]:
 
 
 platformID = 'TTK'
 
 
-# In[ ]:
+# In[67]:
 
+
+from IPython.display import display
 
 import pandas as pd
 
 
-# In[14]:
+# In[68]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
-# Now import your modules 
+# Now import your modules
 from config_GAM2025 import gam_info
 import functions
 
 
-# In[15]:
+# In[69]:
 
 
 # Load country mapping
-country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YouTube Codes']]
+country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
 # Load country mapping
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
 
-# In[16]:
+# In[70]:
 
 
 # Utility functions
@@ -59,7 +66,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[17]:
+# In[71]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -76,7 +83,11 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     - missing_from_new: rows in original_df not found in new_df
     - differing_rows: rows where key matches but mapped columns differ
     """
-
+    for key in key_columns_new:
+        # Convert both original and new key columns to string
+        original_df[key] = original_df[key].astype(str).str.replace(r"\.0$", "", regex=True)
+        new_df[key] = new_df[key].astype(str).str.replace(r"\.0$", "", regex=True)
+    
     # Rename original_df to match new_df column names
     original_df_renamed = original_df.rename(columns=column_mapping)
 
@@ -85,6 +96,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     original_subset = original_df_renamed[all_columns].copy()
     new_subset = new_df[all_columns].copy()
 
+        
     # Round numeric columns to nearest integer
     for col in all_columns:
         if pd.api.types.is_numeric_dtype(original_subset[col]) and pd.api.types.is_numeric_dtype(new_subset[col]):
@@ -117,7 +129,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[18]:
+# In[72]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, 
@@ -174,23 +186,41 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[19]:
+# In[73]:
 
 
 # Dataset configuration
 datasets = [
+    {
+        "name": "Country",
+        "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/data/TT country %.xlsx",
+        "new_path": f"../data/processed/TTK/{gam_info['file_timeinfo']}_TTK_country.csv",
+        "column_mapping": {
+            "PlaceID (GAM Pivot)": "PlaceID",
+            "Profile ID": "Channel ID",
+            "% country": "percentage",
+            },
+        "key_columns": ["Channel ID", "PlaceID"],
+        "method": "percentage",
+        "threshold": 0.0001,
+        "preprocess": {
+            "standardize_country": True,
+            "week_mapping": False
+        },
+        "notes": "perfect match"
+    },
     {
         "name": "Unique Viewers",
         "original_path": "../data/interim/Tiktok raw data 10s test.xlsx",
         "new_path": f"../data/processed/TTK/GAM2025_TTK_views.csv",
         "column_mapping": {
             "w/c": "w/c",
-            "Content ID": "Content ID",
+            "Content ID": "content_id",
             "Tik Tok Service Code": "ServiceID",
             "Profile name": "Channel Name",
-            "Final Video Views": "Final Video Views"
+            "Final Video Views": "final_video_views"
         },
-        "key_columns": ["Content ID","Channel Name", "ServiceID", "w/c"],
+        "key_columns": ["content_id","Channel Name", "ServiceID", "w/c"],
         "method": "integer",
         "preprocess": {
             "standardize_country": True,
@@ -236,107 +266,264 @@ datasets = [
         },
         "notes": "Missing because Alteryx Workflow joins over name rather than ID"
     },
-    {
-        "name": "WSL Weekly",
-        "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok WSL.xlsx",
-        "new_path": f"../data/singlePlatform/output/weekly/{gam_info['file_timeinfo']}_WEEKLY_{platformID}_WSLbyCountry.xlsx",
+        {
+        "name": "TikTok ALL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok ALL.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_ALLbyCountry.xlsx",
         "column_mapping": {
-            "Service Code": "ServiceID",
-            "Country Code": "PlaceID",
-            "Reach": "Reach",
-            "w/c": "w/c"
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
         },
-        "key_columns": ["ServiceID", "PlaceID", "w/c"],
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
         "method": "integer",
         "preprocess": {
-            "standardize_country": True,
+            "standardize_country": False,
             "week_mapping": True
         },
-        "notes": "poifect"
+        "comment": """  
+        
+        """
     },
     {
-        "name": "MA- Weekly",
-        "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok MA.xlsx",
-        "new_path": f"../data/singlePlatform/output/weekly/{gam_info['file_timeinfo']}_WEEKLY_{platformID}_MA-byCountry.xlsx",
+        "name": "TikTok ANW Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok ANW.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_ANWbyCountry.xlsx",
         "column_mapping": {
-            "Service Code": "ServiceID",
-            "Country Code": "PlaceID",
-            "Reach": "Reach",
-            "w/c": "w/c"
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
         },
-        "key_columns": ["ServiceID", "PlaceID", "w/c"],
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
         "method": "integer",
         "preprocess": {
-            "standardize_country": True,
+            "standardize_country": False,
             "week_mapping": True
         },
-        "notes": "stopped comparing anything after that as minnie's output files are drastically different from the numbers in her own workflow"
+        "comment": """  
+        
+        """
     },
     {
-        "name": "GNL Weekly",
-        "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok GNL.xlsx",
-        "new_path": f"../data/singlePlatform/output/weekly/{gam_info['file_timeinfo']}_WEEKLY_{platformID}_GNLbyCountry.xlsx",
+        "name": "TikTok ANY Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok ANY.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_ANYbyCountry.xlsx",
         "column_mapping": {
-            "Service Code": "ServiceID",
-            "Country Code": "PlaceID",
-            "Reach": "Reach",
-            "w/c": "w/c"
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
         },
-        "key_columns": ["ServiceID", "PlaceID", "w/c"],
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
         "method": "integer",
         "preprocess": {
-            "standardize_country": True,
+            "standardize_country": False,
             "week_mapping": True
         },
-        "notes": "to do "
-    },   
+        "comment": """  
+        
+        """
+    },
     {
-        "name": "WOR Weekly",
-        "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok WOR.xlsx",
-        "new_path": f"../data/singlePlatform/output/weekly/{gam_info['file_timeinfo']}_WEEKLY_{platformID}_WORbyCountry.xlsx",
+        "name": "TikTok AX2 Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok AX2.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_AX2byCountry.xlsx",
         "column_mapping": {
-            "Service Code": "ServiceID",
-            "Country Code": "PlaceID",
-            "Reach": "Reach",
-            "w/c": "w/c"
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
         },
-        "key_columns": ["ServiceID", "PlaceID", "w/c"],
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
         "method": "integer",
         "preprocess": {
-            "standardize_country": True,
+            "standardize_country": False,
             "week_mapping": True
         },
-        "notes": "to do "
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "TikTok AXE Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok AXE.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_AXEbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "TikTok EN2 Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok EN2 by country.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_EN2byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "TikTok ENG Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok ENG by country.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_ENGbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "TikTok GNL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok GNL.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_GNLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "TikTok MA- Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok MA.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_MA-byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "TikTok TOT Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok TOT.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_TOTbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "TikTok WOR Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok WOR.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_WORbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "TikTok WSL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok WSL.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_WSLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
     },
 ]
 
 
-# In[22]:
+# In[74]:
 
 
-# Dataset configuration
-datasets = [
-    {
-        "name": "Country",
-        "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/data/TT country %.xlsx",
-        "new_path": "../data/processed/TTK/GAM2025_TTK_country.csv",
-        "column_mapping": {
-            "PlaceID (GAM Pivot)": "PlaceID",
-            "Profile ID": "profile_id",
-            "w/c": "w/c"
-            "% country": "country_%",
-            },
-        "key_columns": ["profile_id", "PlaceID"],
-        "method": "percentage",
-        "threshold": 0.0001,
-        "preprocess": {
-            "standardize_country": True,
-            "week_mapping": False
-        },
-        "notes": "perfect match"
-    },
-    
-    ]
 # Execute comparisons
 for ds in datasets:
     print(f"\n--- Processing {ds['name']} ---")
@@ -392,64 +579,4 @@ for ds in datasets:
             display(different)
     else:
         display(different)
-
-
-# In[21]:
-
-
-missing['profile_id'].value_counts()
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
 

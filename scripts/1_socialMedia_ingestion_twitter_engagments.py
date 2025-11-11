@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[4]:
 
 
 platformID = 'TWI'
 
 
-# In[2]:
+# In[5]:
 
 
 from datetime import datetime
@@ -18,24 +18,29 @@ import psycopg2
 
 # ## import helper
 
-# In[3]:
+# In[6]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
 from config_GAM2025 import gam_info
 
-from functions import execute_sql_query, joining_allWeeks_perChannel
+from functions import execute_sql_query
 import test_functions
 
 
-# In[4]:
+# In[7]:
 
 
 # country
@@ -65,7 +70,7 @@ formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_id
 
 # ## activity
 
-# In[5]:
+# In[8]:
 
 
 metric_ids = ['tweet media engagements', 
@@ -117,7 +122,7 @@ test_functions.test_weeks_presence('week_ending',
 
 
 
-# In[6]:
+# In[9]:
 
 
 # Perform crosstab operation
@@ -138,7 +143,7 @@ test_functions.test_weeks_presence_per_account('week_ending', 'tw_account_id',
 
 # ## metadata
 
-# In[7]:
+# In[10]:
 
 
 sql_query = f"""
@@ -176,7 +181,7 @@ test_functions.test_weeks_presence('week_ending',
 
 # ## combine
 
-# In[9]:
+# In[11]:
 
 
 twitter_activity = twitter_activity.rename(columns={'tw_metric_end_time': 'week_ending', 
@@ -189,7 +194,7 @@ test_functions.test_inner_join(twitter_activity, twitter_metadata, ['tw_account_
                                '1_TW_8', test_step="combining activity & metadata ")
 
 
-# In[ ]:
+# In[12]:
 
 
 # adress those are lost 

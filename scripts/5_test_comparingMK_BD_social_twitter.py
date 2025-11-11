@@ -6,27 +6,34 @@
 # - also minnie's weekly gnl dataset is missing week 51 & 52? 
 # - 
 
-# In[28]:
+# In[32]:
 
 
 platformID = 'TWI'
 
 
-# In[ ]:
+# In[33]:
 
+
+from IPython.display import display
 
 import pandas as pd
 pd.set_option('display.float_format', '{:.0f}'.format)
 
 
-# In[29]:
+# In[34]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
@@ -34,16 +41,16 @@ from config_GAM2025 import gam_info
 import functions
 
 
-# In[30]:
+# In[35]:
 
 
 # Load country mapping
-country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YouTube Codes']]
+country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
 # Load country mapping
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
 
-# In[31]:
+# In[36]:
 
 
 # Utility functions
@@ -65,7 +72,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[32]:
+# In[37]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -123,7 +130,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[33]:
+# In[38]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, threshold=0.0001):
@@ -178,13 +185,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[ ]:
-
-
-
-
-
-# In[34]:
+# In[39]:
 
 
 # Dataset configuration
@@ -193,7 +194,7 @@ datasets = [
     {
         "name": "Engagements",
         "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/data/final data/TW_GAM2025_REDSHIFT.xlsx",
-        "new_path": f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.xlsx",
+        "new_path": f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv",
         "column_mapping": {
             "tw_account_id": "tw_account_id",
             "week_commencing": "w/c",
@@ -210,7 +211,7 @@ datasets = [
     
     {
         "name": "pre Business Unites",
-        "original_path": "helper/tw_minnie_preBU.csv",
+        "original_path": "../helper/tw_minnie_preBU.csv",
         "new_path": f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer_country.csv",
         "column_mapping": {
             'w/c': 'w/c', 
@@ -230,7 +231,7 @@ datasets = [
     {
         "name": "GNL Weekly",
         "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Twitter GNL.xlsx",
-        "new_path": "../data/singlePlatform/output/weekly/GAM2025_WEEKLY_Twitter_GNLbyCountry.xlsx",
+        "new_path": "../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_GNLbyCountry.xlsx",
         "column_mapping": {
             "Service Code": "ServiceID",
             "Country Code": "PlaceID",
@@ -242,7 +243,12 @@ datasets = [
         "preprocess": {
             "standardize_country": True,
             "week_mapping": True
-        }
+        },
+        "notes": """the missing are all from the last two weeks. 
+        I don't see these values in the alteryx workflow either so not sure where they come from in 
+        the output file. 
+        differences: looking at the biggest difference I fidn the same value from my calculation in
+        alteryx but the excel sheet has a different number... """
     },
 ]
 '''{
@@ -272,26 +278,319 @@ datasets = [
 
 datasets = [
     {
-        "name": "GNL Weekly",
-        "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Twitter GNL.xlsx",
-        "new_path": "../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_GNLbyCountry.xlsx",
+        "name": "Twitter ALL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter ALL.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_ALLbyCountry.xlsx",
         "column_mapping": {
-            "Service Code": "ServiceID",
-            "Country Code": "PlaceID",
-            "Twitter Engaged Users by Country": "Reach",
-            "w/c": "w/c"
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
         },
-        "key_columns": ["ServiceID", "PlaceID", "w/c"],
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
         "method": "integer",
         "preprocess": {
-            "standardize_country": True,
+            "standardize_country": False,
             "week_mapping": True
         },
-        "notes": "the missing are all from the last two weeks. 
-        I don't see these values in the alteryx workflow either so not sure where they come from in 
-        the output file. 
-        differences: looking at the biggest difference I fidn the same value from my calculation in
-        alteryx but the excel sheet has a different number... "
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter ANW Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter ANW.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_ANWbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter ANY Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter ANY.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_ANYbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter AX2 Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter AX2.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_AX2byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter AXE Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter AXE.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_AXEbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter EN2 Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter EN2 by country.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_EN2byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter ENG Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter ENG by country.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_ENGbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter ENW Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter ENW by country.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_ENWbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter FOA Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter FOA.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_FOAbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter GNL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter GNL.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_GNLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter MA- Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter MA.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_MA-byCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter TOT Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter TOT.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_TOTbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter WOR Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter WOR.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_WORbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter WSE Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter WSE.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_WSEbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+    {
+        "name": "Twitter WSL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly Twitter WSL.xlsx",
+        "new_path": f"../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_WSLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
     },
 ]
 # Execute comparisons
@@ -345,27 +644,19 @@ for ds in datasets:
     print("Rows missing from new:")
     display(missing)
     print("Rows with differences:")
-    if 'Reach_new' in different.columns:
-        if len(different) > 0:
-            different['Reach_new'] = different['Reach_new'].fillna(0)
-            different['diff'] = different['Reach_orig'] - different['Reach_new']
-            display(different.sort_values('diff', ascending=False))
+    if not different.empty:
+        numeric_cols = [col for col in different.columns if col.endswith('_orig') and pd.api.types.is_numeric_dtype(different[col])]
+    
+        for col in numeric_cols:
+            base_col = col.replace('_orig', '')
+            new_col = f"{base_col}_new"
+            diff_col = f"{base_col}_diff"
+            if new_col in different.columns:
+                different[diff_col] = different[col] - different[new_col]
+        
+            display(different.sort_values(by=[col for col in different.columns if col.endswith('_diff')][0], ascending=False))
         else:
             display(different)
-    else:
-            display(different)
-
-
-# In[40]:
-
-
-orig[orig['w/c']=='2025-03-17']
-
-
-# In[39]:
-
-
-missing.shape
 
 
 # In[ ]:

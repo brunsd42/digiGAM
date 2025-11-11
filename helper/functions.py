@@ -301,163 +301,208 @@ def calculate_weekly_sumServices(df, serviceID, platformID, gam_info):
     
     return df_weekly
 
-def process_overlap(data, service1, service2, grouped_service, 
+def process_overlap(data, service1, service2, grouped_service,
                     overlap_type, overlap_service_id, platformID, gam_info, path,
-                    country_codes, pop_size_col, overlaps='n/a', ):
+                    country_codes, pop_size_col, overlaps='n/a'):
     """
-    overlap_service_id = which service ID contains the overlap factor!
+    Combines two services into a grouped service, applying overlap logic if both are present.
+    If only one service has data, it is used directly.
     """
+
     # Ensure the grouped_service key exists
     if grouped_service not in data:
         data[grouped_service] = {}
 
-    # Extract weekly data
-    df1 = data[service1]['weekly']
-    df2 = data[service2]['weekly']
-    
-    # Concatenate
-    combined_df = pd.concat([df1, df2])
-    
-    # Pivot
-    pivot_df = pd.crosstab(
-        index=[combined_df['PlaceID'], combined_df['w/c']],
-        columns=combined_df['ServiceID'],
-        values=combined_df['Reach'],
-        aggfunc='sum'
-    ).reset_index()
-    
-    # Fill missing values
-    pivot_df[service1] = pivot_df[service1].fillna(0)
-    pivot_df[service2] = pivot_df[service2].fillna(0)
-    
-    # Get overlap
-    if overlap_type != 'sainsbury':
-        overlap_df = overlaps[overlaps['Overlap Type'] == overlap_type]
-        overlap_value = overlap_df.loc[overlap_df['ServiceID'] == overlap_service_id, 'overlap_%'].values[0]
-        print(f"overlap applied: {overlap_value}")
-        pivot_df['overlap'] = overlap_value
-        
-        
-        # Calculate adjusted reach
-        pivot_df['Reach'] = pivot_df.apply(
-            lambda row: row[service1] + row[service2] * (1 - row['overlap']) 
-            if row[service1] > row[service2] 
-            else row[service1] * (1 - row['overlap']) + row[service2],
-            axis=1
-        )
-    else: 
-        # add population
-        pivot_df = pivot_df.merge(country_codes, on='PlaceID', how='left', indicator=True)
-        print(f"adding population: {pivot_df._merge.value_counts()}")
-        pivot_df = pivot_df.drop(columns=['_merge'])
-        
-        services = [service1, service2]
-        pivot_df = sainsbury_formula(pivot_df, pop_size_col, 
-                                      services, 'Reach')
-        
-    # Assign grouped service
-    pivot_df['ServiceID'] = grouped_service
-    
-    # Export
-    file_name = f"{gam_info['file_timeinfo']}_{platformID}_{grouped_service}byCountry.xlsx"
-    pivot_df.to_excel(f"../data/overlaps_datasets/{file_name}", index=None)
-    
-    # Weekly and annual aggregation
-    data[grouped_service]['weekly'] = calculate_weekly_sumServices(pivot_df, grouped_service, platformID, gam_info)
-    annual_df = calculate_annualy(data[grouped_service]['weekly'], platformID, gam_info)
-    annual_file = f"{gam_info['file_timeinfo']}_{platformID}_{grouped_service}.xlsx"
-    annual_df.to_excel(path + annual_file, index=None)
-    data[grouped_service]['annual'] = annual_df
-    
-    return pivot_df, annual_df
+    # Extract weekly data safely
+    df1 = data.get(service1, {}).get('weekly', pd.DataFrame())
+    df2 = data.get(service2, {}).get('weekly', pd.DataFrame())
 
-def process_overlap_v2(data, service1, service2, grouped_service,
-                       overlaps, overlap_type, overlap_service_id, platformID, gam_info, path,
-                       country_codes, pop_size_col, service3=None, ):  
-    # <-- Add service3 as an optional argument
-    """
-    overlap_service_id = which service ID contains the overlap factor!
-    service3: only used for overlap_type 'sainsbury'
-    """
-    # Ensure the grouped_service key exists
-    if grouped_service not in data:
-        data[grouped_service] = {}
+    # Determine which services are available
+    has_df1 = isinstance(df1, pd.DataFrame) and not df1.empty
+    has_df2 = isinstance(df2, pd.DataFrame) and not df2.empty
 
-    # Extract weekly data
-    df1 = data[service1]['weekly']
-    df2 = data[service2]['weekly']
-    
-    # For sainsbury, include service3
-    if service3 is not None:
-        df3 = data[service3]['weekly']
-        combined_df = pd.concat([df1, df2, df3])
-        services = [service1, service2, service3]
+    if not has_df1:
+        print(f"Warning: {service1} weekly data is missing or empty.")
+    if not has_df2:
+        print(f"Warning: {service2} weekly data is missing or empty.")
+
+    # If both are empty, skip
+    if not has_df1 and not has_df2:
+        print(f"No data to process for {service1} and {service2}. Skipping.")
+        return pd.DataFrame(), pd.DataFrame()
+
+    # If only one is available, use it directly
+    if has_df1 and not has_df2:
+        print(f"Only {service1} available. Using it as {grouped_service}.")
+        pivot_df = df1.copy()
+        pivot_df['ServiceID'] = grouped_service
+
+    elif has_df2 and not has_df1:
+        print(f"Only {service2} available. Using it as {grouped_service}.")
+        pivot_df = df2.copy()
+        pivot_df['ServiceID'] = grouped_service
+
     else:
-        combined_df = pd.concat([df1, df2])
-        services = [service1, service2]
-    
-    # Pivot
-    pivot_df = pd.crosstab(
-        index=[combined_df['PlaceID'], combined_df['w/c']],
-        columns=combined_df['ServiceID'],
-        values=combined_df['Reach'],
-        aggfunc='sum'
-    ).reset_index()
-    
-    # Fill missing values for all services
-    for service in services:
-        if service in pivot_df.columns:
-            pivot_df[service] = pivot_df[service].fillna(0)
-    
-    # Get overlap
-    if overlap_type != 'sainsbury':
-        if grouped_service == 'EN2':
-            
-            pivot_df['Reach'] = np.where(
-                        (pivot_df['GNL'] + pivot_df['WSE']) > pivot_df['WOR'],
-                        (pivot_df['GNL'] + pivot_df['WSE']) + (0.892857142857143 * pivot_df['WOR']),
-                        pivot_df['WOR'] + ((pivot_df['GNL'] + pivot_df['WSE']) * 0.952380952380952)
-                    )
+        # Both available — proceed with overlap logic
+        combined_df = pd.concat([df1, df2], ignore_index=True)
 
-        else:
+        pivot_df = pd.crosstab(
+            index=[combined_df['PlaceID'], combined_df['w/c']],
+            columns=combined_df['ServiceID'],
+            values=combined_df['Reach'],
+            aggfunc='sum'
+        ).reset_index()
+
+        # Ensure both service columns exist
+        for service in [service1, service2]:
+            if service not in pivot_df.columns:
+                print(f"Warning: {service} column missing from pivot table. Filling with 0.")
+                pivot_df[service] = 0
+            else:
+                pivot_df[service] = pivot_df[service].fillna(0)
+
+        if overlap_type != 'sainsbury':
             overlap_df = overlaps[overlaps['Overlap Type'] == overlap_type]
             overlap_value = overlap_df.loc[overlap_df['ServiceID'] == overlap_service_id, 'overlap_%'].values[0]
             print(f"overlap applied: {overlap_value}")
             pivot_df['overlap'] = overlap_value
-            
-            # Calculate adjusted reach (unchanged)
+
             pivot_df['Reach'] = pivot_df.apply(
                 lambda row: row[service1] + row[service2] * (1 - row['overlap']) 
                 if row[service1] > row[service2] 
                 else row[service1] * (1 - row['overlap']) + row[service2],
                 axis=1
             )
-        
-    else: 
-        # add population
-        pivot_df = pivot_df.merge(country_codes, on='PlaceID', how='left', indicator=True)
-        print(f"adding population: {pivot_df._merge.value_counts()}")
-        pivot_df = pivot_df.drop(columns=['_merge'])
-        
-        # Pass all services to sainsbury_formula
-        pivot_df = sainsbury_formula(pivot_df, pop_size_col, services, 'Reach')
-            
-    # Assign grouped service
-    pivot_df['ServiceID'] = grouped_service
-    
+        else:
+            pivot_df = pivot_df.merge(country_codes, on='PlaceID', how='left', indicator=True)
+            print(f"adding population: {pivot_df._merge.value_counts()}")
+            pivot_df = pivot_df.drop(columns=['_merge'])
+
+            services = [service1, service2]
+            pivot_df = sainsbury_formula(pivot_df, pop_size_col, services, 'Reach')
+
+        pivot_df['ServiceID'] = grouped_service
+
     # Export
     file_name = f"{gam_info['file_timeinfo']}_{platformID}_{grouped_service}byCountry.xlsx"
     pivot_df.to_excel(f"../data/overlaps_datasets/{file_name}", index=None)
-    
+
     # Weekly and annual aggregation
     data[grouped_service]['weekly'] = calculate_weekly_sumServices(pivot_df, grouped_service, platformID, gam_info)
     annual_df = calculate_annualy(data[grouped_service]['weekly'], platformID, gam_info)
     annual_file = f"{gam_info['file_timeinfo']}_{platformID}_{grouped_service}.xlsx"
     annual_df.to_excel(path + annual_file, index=None)
     data[grouped_service]['annual'] = annual_df
-    
-    return pivot_df, annual_df
 
+    return pivot_df, annual_df
+    
+def process_overlap_v2(data, service1, service2, grouped_service,
+                       overlaps, overlap_type, overlap_service_id, platformID, gam_info, path,
+                       country_codes, pop_size_col, service3=None):  
+    """
+    Combines services into a grouped service, applying overlap logic if applicable.
+    If only one or two services are available, uses them directly.
+    service3 is only used for overlap_type 'sainsbury'.
+    """
+
+    import numpy as np
+    import pandas as pd
+
+    # Ensure the grouped_service key exists
+    if grouped_service not in data:
+        data[grouped_service] = {}
+
+    # Extract weekly data safely
+    def safe_get(service):
+        entry = data.get(service, {})
+        return entry['weekly'] if isinstance(entry, dict) and 'weekly' in entry else pd.DataFrame()
+
+    df1 = safe_get(service1)
+    df2 = safe_get(service2)
+    df3 = safe_get(service3) if service3 else pd.DataFrame()
+
+    # Track which services are available
+    services = []
+    combined_parts = []
+
+    for svc, df in zip([service1, service2, service3], [df1, df2, df3]):
+        if svc and isinstance(df, pd.DataFrame) and not df.empty:
+            services.append(svc)
+            combined_parts.append(df)
+        elif svc:
+            print(f"Warning: {svc} weekly data is missing or empty.")
+
+    if not combined_parts:
+        print(f"No data to process for {service1}, {service2}, {service3}. Skipping.")
+        return pd.DataFrame(), pd.DataFrame()
+
+    # Combine available data
+    combined_df = pd.concat(combined_parts, ignore_index=True)
+
+    # Pivot
+    pivot_df = pd.crosstab(
+        index=[combined_df['PlaceID'], combined_df['w/c']],
+        columns=combined_df['ServiceID'],
+        values=combined_df['Reach'],
+        aggfunc='sum'
+    ).reset_index()
+
+    # Fill missing service columns with 0
+    for service in services:
+        if service not in pivot_df.columns:
+            print(f"Warning: {service} column missing from pivot table. Filling with 0.")
+            pivot_df[service] = 0
+        else:
+            pivot_df[service] = pivot_df[service].fillna(0)
+
+    # Overlap logic
+    if overlap_type != 'sainsbury':
+        if grouped_service == 'EN2':
+            pivot_df['Reach'] = np.where(
+                (pivot_df.get('GNL', 0) + pivot_df.get('WSE', 0)) > pivot_df.get('WOR', 0),
+                (pivot_df.get('GNL', 0) + pivot_df.get('WSE', 0)) + (0.892857142857143 * pivot_df.get('WOR', 0)),
+                pivot_df.get('WOR', 0) + ((pivot_df.get('GNL', 0) + pivot_df.get('WSE', 0)) * 0.952380952380952)
+            )
+        elif len(services) >= 2:
+            overlap_df = overlaps[overlaps['Overlap Type'] == overlap_type]
+            overlap_value = overlap_df.loc[overlap_df['ServiceID'] == overlap_service_id, 'overlap_%'].values[0]
+            print(f"overlap applied: {overlap_value}")
+            pivot_df['overlap'] = overlap_value
+
+            s1, s2 = services[:2]
+            pivot_df['Reach'] = pivot_df.apply(
+                lambda row: row[s1] + row[s2] * (1 - row['overlap']) 
+                if row[s1] > row[s2] 
+                else row[s1] * (1 - row['overlap']) + row[s2],
+                axis=1
+            )
+        else:
+            # Only one service available, use it directly
+            pivot_df['Reach'] = pivot_df[services[0]]
+
+    else:
+        # Sainsbury logic
+        pivot_df = pivot_df.merge(country_codes, on='PlaceID', how='left', indicator=True)
+        print(f"adding population: {pivot_df._merge.value_counts()}")
+        pivot_df = pivot_df.drop(columns=['_merge'])
+
+        pivot_df = sainsbury_formula(pivot_df, pop_size_col, services, 'Reach')
+
+    # Assign grouped service
+    pivot_df['ServiceID'] = grouped_service
+
+    # Export
+    file_name = f"{gam_info['file_timeinfo']}_{platformID}_{grouped_service}byCountry.xlsx"
+    pivot_df.to_excel(f"../data/overlaps_datasets/{file_name}", index=None)
+
+    # Weekly and annual aggregation
+    data[grouped_service]['weekly'] = calculate_weekly_sumServices(pivot_df, grouped_service, platformID, gam_info)
+    annual_df = calculate_annualy(data[grouped_service]['weekly'], platformID, gam_info)
+    annual_file = f"{gam_info['file_timeinfo']}_{platformID}_{grouped_service}.xlsx"
+    annual_df.to_excel(path + annual_file, index=None)
+    data[grouped_service]['annual'] = annual_df
+
+    return pivot_df, annual_df
 
 def calculate_aggregated_services(data, stages, platform, gam_info, path, 
                                   overlaps, country_codes, pop_size_col):
@@ -475,7 +520,7 @@ def calculate_aggregated_services(data, stages, platform, gam_info, path,
                 overlaps=overlaps,
                 overlap_type=o_type,
                 overlap_service_id=o_id,
-                platform=platform,
+                platformID=platform,
                 gam_info=gam_info,
                 path=path,
                 country_codes=country_codes,
@@ -491,7 +536,7 @@ def calculate_aggregated_services(data, stages, platform, gam_info, path,
                 overlaps=overlaps,
                 overlap_type=o_type,
                 overlap_service_id=o_id,
-                platform=platform,
+                platformID=platform,
                 gam_info=gam_info,
                 path=path,
                 country_codes=country_codes,

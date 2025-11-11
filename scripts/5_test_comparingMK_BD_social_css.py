@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 import pandas as pd
+from IPython.display import display
 
 
 # In[3]:
@@ -13,11 +14,16 @@ import pandas as pd
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
-# Now import your modules 
+# Now import your modules
 from config_GAM2025 import gam_info
 import functions
 
@@ -26,7 +32,7 @@ import functions
 
 
 # Load country mapping
-country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YouTube Codes']]
+country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
 # Load country mapping
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
@@ -174,7 +180,7 @@ datasets = [
     {
         "name": "WT - ",
         "original_path": "../data/interim/mk_digital_wt_weekly_data.csv",
-        "new_path": f"../data/combinePlatforms/{gam_info['file_timeinfo']}_WT-.csv",
+        "new_path": f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_WT-.csv",
         "column_mapping": {
             "ServiceID": "ServiceID",
             "PlaceID": "PlaceID",

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[3]:
+# In[5]:
 
 
 from tqdm import tqdm 
@@ -15,7 +15,7 @@ import numpy as np
 import missingno as msno
 
 
-# In[4]:
+# In[6]:
 
 
 platformID = 'INS'
@@ -23,14 +23,19 @@ platformID = 'INS'
 
 # ## import helper
 
-# In[5]:
+# In[7]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
@@ -40,7 +45,7 @@ import test_functions
 import functions 
 
 
-# In[6]:
+# In[8]:
 
 
 # country
@@ -54,7 +59,7 @@ week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}",
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 
 # social media accounts
-socialmedia_accounts = pd.read_excel("helper/ins_account_lookup.xlsx")
+socialmedia_accounts = pd.read_excel("../helper/ins_account_lookup.xlsx")
 socialmedia_accounts = socialmedia_accounts.rename(columns={'IG studios exc uk': 'Excluding UK'})
 # overlaps 
 overlaps = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='overlap')
@@ -63,7 +68,7 @@ overlaps.head()
 
 # ## import data 
 
-# In[7]:
+# In[9]:
 
 
 full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer_country.csv")
@@ -87,7 +92,7 @@ full_df.head()
 
 # ## functions
 
-# In[8]:
+# In[10]:
 
 
 '''def process_overlap(data, service1, service2, grouped_service, overlap_type, 
@@ -157,7 +162,7 @@ full_df.head()
 '''
 
 
-# In[9]:
+# In[11]:
 
 
 '''def process_overlap_v2(data, service1, service2, grouped_service,
@@ -250,7 +255,7 @@ full_df.head()
 
 # # calculate 
 
-# In[10]:
+# In[12]:
 
 
 path = f"../data/singlePlatform/{platformID}/"
@@ -258,7 +263,7 @@ path = f"../data/singlePlatform/{platformID}/"
 
 # ## Business Units
 
-# In[11]:
+# In[13]:
 
 
 data = {}
@@ -336,7 +341,7 @@ for bu in gam_info['business_units'].keys():
 
 # ## AXE
 
-# In[12]:
+# In[14]:
 
 
 grouped_service = 'AXE'
@@ -347,7 +352,7 @@ data[grouped_service] = {'weekly': 'tbd',
 
 # ### weekly 
 
-# In[13]:
+# In[15]:
 
 
 wsl_weekly = data['WSL']['weekly']
@@ -356,17 +361,26 @@ wsl_weekly = wsl_weekly[~wsl_weekly['ServiceID'].isin(['SER', 'SIN'])]
 data[grouped_service]['weekly'] = functions.calculate_weekly_sumServices(wsl_weekly, grouped_service, platformID, gam_info)
 
 
-# ### annualy
+# ## AX2, ANW, ANY, TOT, ALL, ENG, EN2 ENW
+# 
 
-# In[14]:
+# In[16]:
 
 
-'''axe_annual = functions.calculate_annualy(data[grouped_service]['weekly'], platformID, gam_info)#, aggregation_type='old')
-path = "../data/singlePlatform/"
-file_path = f"{gam_info['file_timeinfo']}_{platform}_{grouped_service}.xlsx"
-axe_annual.to_excel(path+file_path, index=None)
-data[grouped_service]['annual'] = axe_annual
-file_path'''
+path = f"../data/singlePlatform/{platformID}/"
+stages = [
+        # (grouped_service, service1, service2, overlap_type, overlap_service_id, use_v2, optional_service3)
+        ('AX2', 'FOA', 'AXE', 'WSL/FOA', 'FOA', False, None),
+        ('ANW', 'AX2', 'WSE', 'WSE/WSL', 'AXE', False, None),
+        ('ANY', 'GNL', 'ANW', 'WSL/GNL', 'ANW', False, None),
+        ('TOT', 'MA-', 'ANY', 'sainsbury', '-', False, None),
+        ('ALL', 'TOT', 'WOR', 'sainsbury', '-', False, None),
+        ('ENG', 'GNL', 'WSE', 'sainsbury', '-', False, None),
+        ('EN2', 'GNL', 'WSE', 'other', '-', True, 'WOR'),
+        ('ENW', 'WSE', 'FOA', 'sainsbury', '-', False, None)
+    ]
+data = functions.calculate_aggregated_services(data, stages, platformID, gam_info, path, overlaps, 
+                                                country_codes, pop_size_col)
 
 
 # ## AX2
@@ -376,16 +390,16 @@ file_path'''
 # In[15]:
 
 
-grouped_service = 'AX2'
+'''grouped_service = 'AX2'
 data[grouped_service] = {'weekly': 'tbd',
                          'annual': 'tbd'}
-    
+    '''
 
 
 # In[16]:
 
 
-pivot_ax, annual_ax = functions.process_overlap(
+'''pivot_ax, annual_ax = functions.process_overlap(
     data=data,
     service1='FOA',
     service2='AXE',
@@ -400,6 +414,7 @@ pivot_ax, annual_ax = functions.process_overlap(
     pop_size_col=pop_size_col
 )
 
+'''
 
 
 # ## ANW
@@ -407,7 +422,7 @@ pivot_ax, annual_ax = functions.process_overlap(
 # In[17]:
 
 
-grouped_service = 'ANW'
+'''grouped_service = 'ANW'
 data[grouped_service] = {'weekly': 'tbd',
                          'annual': 'tbd'}
     
@@ -425,6 +440,7 @@ pivot_anw, annual_anw = functions.process_overlap(
     country_codes=country_codes, 
     pop_size_col=pop_size_col
 )
+'''
 
 
 # ## ANY 
@@ -433,7 +449,7 @@ pivot_anw, annual_anw = functions.process_overlap(
 # In[18]:
 
 
-grouped_service = 'ANY'
+'''grouped_service = 'ANY'
 data[grouped_service] = {'weekly': 'tbd',
                          'annual': 'tbd'}
 
@@ -451,6 +467,7 @@ pivot_any, annual_any = functions.process_overlap(
     country_codes=country_codes, 
     pop_size_col=pop_size_col
 )
+'''
 
 
 # ## TOT 
@@ -459,7 +476,7 @@ pivot_any, annual_any = functions.process_overlap(
 # In[19]:
 
 
-grouped_service = 'TOT'
+'''grouped_service = 'TOT'
 data[grouped_service] = {'weekly': 'tbd',
                          'annual': 'tbd'}
 
@@ -476,6 +493,7 @@ pivot_any, annual_any = functions.process_overlap(
     country_codes=country_codes, 
     pop_size_col=pop_size_col
 )
+'''
 
 
 # ## ALL
@@ -484,7 +502,7 @@ pivot_any, annual_any = functions.process_overlap(
 # In[20]:
 
 
-grouped_service = 'ALL'
+'''grouped_service = 'ALL'
 data[grouped_service] = {'weekly': 'tbd',
                          'annual': 'tbd'}
 
@@ -501,6 +519,7 @@ pivot_any, annual_any = functions.process_overlap(
     country_codes=country_codes, 
     pop_size_col=pop_size_col
 )
+'''
 
 
 # ## ENG
@@ -508,7 +527,7 @@ pivot_any, annual_any = functions.process_overlap(
 # In[21]:
 
 
-grouped_service = 'ENG'
+'''grouped_service = 'ENG'
 data[grouped_service] = {'weekly': 'tbd',
                          'annual': 'tbd'}
 
@@ -525,6 +544,7 @@ pivot_any, annual_any = functions.process_overlap(
     country_codes=country_codes, 
     pop_size_col=pop_size_col
 )
+'''
 
 
 # ## EN2 
@@ -532,7 +552,7 @@ pivot_any, annual_any = functions.process_overlap(
 # In[22]:
 
 
-grouped_service = 'EN2'
+'''grouped_service = 'EN2'
 data[grouped_service] = {'weekly': 'tbd',
                          'annual': 'tbd'}
 
@@ -551,6 +571,7 @@ pivot_any, annual_any = functions.process_overlap_v2(
     pop_size_col=pop_size_col,
     service3='WOR'
 )
+'''
 
 
 # ## ENW
@@ -558,7 +579,7 @@ pivot_any, annual_any = functions.process_overlap_v2(
 # In[23]:
 
 
-grouped_service = 'ENW'
+'''grouped_service = 'ENW'
 data[grouped_service] = {'weekly': 'tbd',
                          'annual': 'tbd'}
 
@@ -575,6 +596,7 @@ pivot_any, annual_any = functions.process_overlap(
     country_codes=country_codes, 
     pop_size_col=pop_size_col
 )
+'''
 
 
 # # Consolidation

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[9]:
 
 
 from datetime import datetime
@@ -22,14 +22,19 @@ from tqdm import tqdm
 
 # ## import helper
 
-# In[2]:
+# In[12]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
@@ -40,7 +45,7 @@ import test_functions
 import functions
 
 
-# In[3]:
+# In[13]:
 
 
 # country
@@ -71,6 +76,12 @@ non_js_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_
 
 # app
 app_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_App')
+
+
+# In[14]:
+
+
+week_tester.columns
 
 
 # ## functions
@@ -108,7 +119,7 @@ for index, row in site_info.iterrows():
     print(api_query)
     
     for jndex, row in week_tester.iterrows():
-        week_number = row['Week Number']
+        week_number = row['WeekNumber_finYear']
         filename = f"../data/raw/site/piano_reports/{gam_info['file_timeinfo']}_reportNo{report_no}_weekNo{week_number}.csv"
         
         # Check if the file exists, if so, continue to the next iteration
@@ -212,10 +223,10 @@ test_functions.test_weeks_presence_per_account('w/c', 'Report No.', full_df, wee
                                                '1_Site_3', test_step='combining api returns')
 
 # add week_lookup data
-full_df = full_df.merge(week_tester[['YearGAE', 'Week Number', 'w/c']], on='w/c', how='left')
+full_df = full_df.merge(week_tester[['YearGAE', 'WeekNumber_finYear', 'w/c']], on='w/c', how='left')
 # excluded: 'API', 'timestamp_queryRun', 'filename', 'Year',
 cols = ['Category', 'Report No.', 'Space', 'Description', 
-        'YearGAE', 'Week Number', 'w/c',  
+        'YearGAE', 'WeekNumber_finYear', 'w/c',  
         'site_level2', 'geo_country', 'm_unique_visitors', 'm_page_loads', 
         'device_type', 'app_name', 'language', 'producer_nonjs', 'src']
 full_df = full_df[cols]

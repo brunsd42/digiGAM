@@ -1,43 +1,54 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[11]:
 
 
 platformID = 'TTK'
 
 
-# In[ ]:
+# In[12]:
 
 
 import pandas as pd
 
 
-# In[3]:
+# In[13]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
-# Now import your modules 
+# Now import your modules
 from config_GAM2025 import gam_info
 import functions
 
 
-# In[4]:
+# In[14]:
+
+
+country_map.columns
+
+
+# In[15]:
 
 
 # Load country mapping
-country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YouTube Codes']]
+country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
 # Load country mapping
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
 
-# In[5]:
+# In[16]:
 
 
 # Utility functions
@@ -59,7 +70,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[6]:
+# In[17]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -117,7 +128,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[7]:
+# In[18]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, 
@@ -174,7 +185,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[8]:
+# In[19]:
 
 
 # Dataset configuration
@@ -328,7 +339,7 @@ datasets = [
 ]
 
 
-# In[11]:
+# In[21]:
 
 
 # Dataset configuration
@@ -410,58 +421,16 @@ for ds in datasets:
         display(different)
 
 
-# In[12]:
+# In[22]:
 
 
-missing['profile_id'].value_counts()
+orig.columns
 
 
-# In[ ]:
+# In[23]:
 
 
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
+new.columns
 
 
 # In[ ]:

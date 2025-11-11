@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[66]:
+# In[14]:
 
 
 from datetime import datetime
@@ -11,20 +11,25 @@ import numpy as np
 
 # ## import helper 
 
-# In[67]:
+# In[15]:
 
 
 platformID = 'FBE'
 
 
-# In[68]:
+# In[16]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
@@ -34,7 +39,7 @@ import test_functions
 from config_GAM2025 import gam_info
 
 
-# In[69]:
+# In[17]:
 
 
 # country
@@ -60,7 +65,7 @@ channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
 
 
-# In[70]:
+# In[18]:
 
 
 socialmedia_accounts.dtypes
@@ -68,7 +73,7 @@ socialmedia_accounts.dtypes
 
 # # engagements 
 
-# In[71]:
+# In[19]:
 
 
 metric_ids = [
@@ -136,9 +141,15 @@ test_functions.test_weeks_presence('week_ending',
                                     week_tester, '1_FB_3', "engagement sql query")
 
 
+# In[ ]:
+
+
+
+
+
 # ## processing engagements
 
-# In[62]:
+# In[20]:
 
 
 subset_cols = ['page_consumptions_by_consumption_type', 
@@ -168,7 +179,13 @@ facebook_engagements_raw.to_csv(f"../data/raw/{platformID}/{gam_info['file_timei
                            index=None, na_rep='')
 
 
-# In[63]:
+# In[21]:
+
+
+subset_consumptionType_grouped
+
+
+# In[22]:
 
 
 # consumptions combination of the various types:
@@ -256,7 +273,7 @@ facebook_engagements['autoplay viewers 10s'] = facebook_engagements['page_video_
 
 # milestone II
 
-# In[64]:
+# In[23]:
 
 
 user_engagements = pd.read_excel("../data/interim/FB Content Engagements per Engaged User - 2024.xlsx")
@@ -291,7 +308,7 @@ facebook_engagements_reach = facebook_engagements_user[cols].to_csv(f"../data/pr
 
 # ## creating click type dataset which is used for facebook factors
 
-# In[65]:
+# In[24]:
 
 
 subset_consumptionType.to_excel(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_click type.xlsx", index=None)

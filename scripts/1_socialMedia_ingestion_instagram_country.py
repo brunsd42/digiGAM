@@ -50,7 +50,7 @@ week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 week_tester['week_ending'] = pd.to_datetime(week_tester['week_ending'])
 
 # social media accounts 
-socialmedia_accounts = pd.read_excel(f"helper/ins_account_lookup.xlsx")
+socialmedia_accounts = pd.read_excel(f"../helper/ins_account_lookup.xlsx")
 
 
 # # ingestion
@@ -79,12 +79,12 @@ sql_query = f"""
     ;
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_userCountry_redshift_extract.csv"
-'''
+
 df = execute_sql_query(sql_query)
 df['ig_user_id'] = df['ig_user_id'].astype(str) 
 
 df.to_csv(file, index=False, na_rep='')
-'''
+
 ig_userCountry = pd.read_csv(file, keep_default_na=False)
 ig_userCountry['ig_user_id'] = ig_userCountry['ig_user_id'].astype(str) 
 

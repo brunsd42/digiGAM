@@ -29,11 +29,16 @@ import missingno as msno
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
-# Now import your modules 
+# Now import your modules
 from config_GAM2025 import gam_info
 
 import test_functions 
@@ -101,7 +106,7 @@ full_df.sample()
 
 platform = 'YT-'
 data = {}
-#temp_bus = ['WOR']#['WSL', 'GNL','Studios', 'WSE', 'MA-', 'FOA']
+#temp_bus = ['WSL']#['WSL', 'GNL','Studios', 'WSE', 'MA-', 'FOA']
 #for bu in temp_bus:
 for bu in gam_info['business_units'].keys():
     print(f"### processing {bu} ######################################################")
@@ -115,11 +120,11 @@ for bu in gam_info['business_units'].keys():
     if df.empty:
         print(f"no data yet for {bu}")
         
-        
     channel_ids = df['Channel ID'].unique().tolist()
     
     # will include / exclude the uk based on bu_configs
     df = functions.include_uk_decision(df, socialmedia_accounts)
+
     
     # for later testing or if sainsbury isn't used 
     summed_uv_by_country = df.groupby(['ServiceID', 'w/c', 'PlaceID'])\
@@ -163,11 +168,10 @@ for bu in gam_info['business_units'].keys():
         yt_deduped = summed_uv_by_country.rename(columns={'uv_by_country': 'Reach'})
     
     # processing 
-    weekly_df, annual_df = functions.summary_excel(yt_deduped, bu, platform, gam_info)
+    weekly_df = functions.summary_excel(yt_deduped, bu, platform, gam_info)
     
     # storing data
     data[bu]['weekly'] = weekly_df
-    data[bu]['annual'] = annual_df
     
     
 
@@ -178,8 +182,7 @@ for bu in gam_info['business_units'].keys():
 
 
 grouped_service = 'AXE'
-data[grouped_service] = {'weekly': 'tbd',
-                         'annual': 'tbd'}
+data[grouped_service] = {'weekly': 'tbd'}
     
 
 
@@ -195,25 +198,13 @@ wsl_weekly = wsl_weekly[~wsl_weekly['ServiceID'].isin(['SER', 'SIN'])]
 data[grouped_service]['weekly'] = functions.calculate_weekly_sumServices(wsl_weekly, grouped_service, platform, gam_info)
 
 
-# ### annualy
-
-# In[9]:
-
-
-axe_annual = functions.calculate_annualy(data[grouped_service]['weekly'], platform, gam_info)#, aggregation_type='old')
-path = "../data/singlePlatform/"
-file_path = f"{gam_info['file_timeinfo']}_{platform}_{grouped_service}.xlsx"
-axe_annual.to_excel(path+file_path, index=None)
-data[grouped_service]['annual'] = axe_annual
-file_path
-
-
 # ## AX2, ANW, ANY, TOT, ALL, ENG, EN2 ENW
 # 
 
-# In[10]:
+# In[11]:
 
 
+path = f"../data/singlePlatform/{platformID}/"
 stages = [
         # (grouped_service, service1, service2, overlap_type, overlap_service_id, use_v2, optional_service3)
         ('AX2', 'FOA', 'AXE', 'WSL/FOA', 'FOA', False, None),
@@ -225,25 +216,12 @@ stages = [
         ('EN2', 'GNL', 'WSE', 'other', '-', True, 'WOR'),
         ('ENW', 'WSE', 'FOA', 'sainsbury', '-', False, None)
     ]
-data = functions.calculate_aggregated_services(data, stages, platform, gam_info, path, overlaps, 
+data = functions.calculate_aggregated_services(data, stages, platformID, gam_info, path, overlaps, 
                                                 country_codes, pop_size_col)
 
 
-# # Consolidation
-
-# In[11]:
+# In[ ]:
 
 
-consolidated_dfs = []
-for service in data.keys():
-    consolidated_dfs.append(data[service]['annual'])
-consolidated_df = pd.concat(consolidated_dfs)
-consolidated_df.head()
 
-
-# In[12]:
-
-
-totals = consolidated_df[consolidated_df['PlaceID'] == 'Total']
-non_totals = consolidated_df[consolidated_df['PlaceID'] != 'Total']
 

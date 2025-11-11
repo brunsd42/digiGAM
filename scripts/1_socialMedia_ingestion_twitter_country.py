@@ -33,7 +33,7 @@ sys.path.insert(0, str(helper_path))
 # Now import your modules 
 from config_GAM2025 import gam_info
 
-from functions import execute_sql_query, joining_allWeeks_perChannel
+from functions import execute_sql_query
 import test_functions
 
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[86]:
 
+
+from IPython.display import display
 
 import pandas as pd 
 import numpy as np
@@ -11,24 +13,29 @@ import os
 from tqdm import tqdm
 
 
-# In[2]:
+# In[87]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
-# Now import your modules 
+# Now import your modules
 from config_GAM2025 import gam_info
 
 import test_functions 
 import functions 
 
 
-# In[3]:
+# In[88]:
 
 
 platformID = 'WSC'
@@ -47,14 +54,14 @@ service_hierarchy = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name
 
 platform_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='PlatformID',)
 
-overlap_SocWebOverlap = pd.read_excel("helper/Final Overlaps 2021.xlsx", sheet_name='SocWebOverlap').drop(columns=['Population 2020']).drop_duplicates()
+overlap_SocWebOverlap = pd.read_excel("../helper/Final Overlaps 2021.xlsx", sheet_name='SocWebOverlap').drop(columns=['Population 2020']).drop_duplicates()
 overlap_SocWebOverlap['PlaceID'] = overlap_SocWebOverlap['PlaceID'].replace('MYT', 'MAY').replace('WLF', 'WFI')
 #overlap_SocWebOverlap = overlap_SocWebOverlap.merge(country_codes, on='PlaceID', how='left')
 
 
 # # functions 
 
-# In[4]:
+# In[89]:
 
 
 def compute_combined_reach(df, services, label, pop_size_col, country_codes, deal_with_zero=True, 
@@ -100,39 +107,60 @@ def compute_combined_reach(df, services, label, pop_size_col, country_codes, dea
 # 
 # ## workflow 5
 
-# In[5]:
+# In[178]:
 
 
-weekly_folder = "../data/singlePlatform/output/weekly/"
+base_folder = "../data/singlePlatform/"
 singlePlatform_df_list = []
 
 valid_platforms = set(platform_tester['PlatformID']) 
-valid_services = set(service_tester['ServiceID'])| {'WSL'}
-            
-for file in tqdm(os.listdir(weekly_folder)):
-    if file == ".DS_Store" or "podcast" in file.lower() or "site" in file.lower():
-        continue
-    parts = file.split("_")
-    if len(parts) >= 4:
-        platform_id = parts[2]
-        service_id = parts[3].replace("byCountry.xlsx", "")
-        
-        if (platform_id in valid_platforms) and (service_id in valid_services):
-            print(f"Valid file: {file}")
-            file_path = os.path.join(weekly_folder, file)
-            temp = pd.read_excel(file_path)
-            temp['w/c'] = pd.to_datetime(temp['w/c'])
-            temp['source'] = file
-            singlePlatform_df_list.append(temp)
+valid_services = set(service_tester['ServiceID']) | {'WSL'}
 
-singlePlatform_df_raw = pd.concat(singlePlatform_df_list, ignore_index=True)
+# Traverse platform folders
+for platform_id in os.listdir(base_folder):
+    platform_path = os.path.join(base_folder, platform_id)
+    if not os.path.isdir(platform_path) or platform_id not in valid_platforms:
+        continue
+
+    # Traverse weekly subfolders
+    for weekly_folder in os.listdir(platform_path):
+        weekly_path = os.path.join(platform_path, weekly_folder)
+        if not os.path.isdir(weekly_path):
+            continue
+
+        # Traverse files in weekly subfolder
+        for file in tqdm(os.listdir(weekly_path), desc=f"{platform_id}/{weekly_folder}"):
+            if file == ".DS_Store" or "podcast" in file.lower() or "site" in file.lower():
+                continue
+
+            # Example: GAM2025_WEEKLY_FBE_EN2byCountry.xlsx
+            try:
+                name_parts = file.replace("byCountry.xlsx", "").split("_")
+                if len(name_parts) >= 4:
+                    platform_id_in_file = name_parts[2]
+                    service_id = name_parts[3]
+
+                    if (platform_id_in_file == platform_id) and (service_id in valid_services):
+                        file_path = os.path.join(weekly_path, file)
+                        temp = pd.read_excel(file_path)
+                        temp['w/c'] = pd.to_datetime(temp['w/c'])
+                        temp['source'] = file
+                        temp['PlatformID'] = platform_id
+                        #temp['ServiceID'] = service_id
+                        temp['WeekFolder'] = weekly_folder
+                        singlePlatform_df_list.append(temp)
+            except Exception as e:
+                print(f"Error processing {file}: {e}")
+
+# Combine all valid dataframes
+singlePlatform_df = pd.concat(singlePlatform_df_list, ignore_index=True)
 
 
 # # processing 
 
 # ## test columns (& remove total )
 
-# In[6]:
+# In[179]:
 
 
 def test_merge(df, tester_df, key, label):
@@ -141,10 +169,10 @@ def test_merge(df, tester_df, key, label):
     print(f"Unmatched {label}s:", merged[merged['_merge'] == 'left_only'][key].unique())
     return merged[merged['_merge'] == 'both'].drop(columns=['_merge'])
 
-singlePlatform_df = test_merge(singlePlatform_df_raw, country_codes, 'PlaceID', 'PlaceID')
-singlePlatform_df = test_merge(singlePlatform_df, week_tester, 'w/c', 'w/c')
-singlePlatform_df = test_merge(singlePlatform_df, platform_tester, 'PlatformID', 'PlatformID')
-singlePlatform_df = test_merge(singlePlatform_df, service_tester, 'ServiceID', 'ServiceID')
+temp1 = test_merge(singlePlatform_df, country_codes, 'PlaceID', 'PlaceID')
+temp2 = test_merge(singlePlatform_df, week_tester, 'w/c', 'w/c')
+temp3 = test_merge(singlePlatform_df, platform_tester, 'PlatformID', 'PlatformID')
+temp4 = test_merge(singlePlatform_df, service_tester, 'ServiceID', 'ServiceID')
 
 reach_issues = singlePlatform_df[(singlePlatform_df['Reach'] == 0) | (singlePlatform_df['Reach'].isna())]
 print("Rows with zero or missing Reach:", reach_issues.shape[0])
@@ -152,10 +180,16 @@ print("Rows with zero or missing Reach:", reach_issues.shape[0])
 duplicates = singlePlatform_df[singlePlatform_df.duplicated(subset=['ServiceID', 'PlatformID', 'PlaceID', 'w/c'])]
 print("Duplicate rows:", duplicates.shape[0])
 
+singlePlatform_df.to_csv(f"../data/combinePlatforms/social_media_data_{gam_info['file_timeinfo']}_platform_weekly.csv")
+
+annual_singlePlatform_df = singlePlatform_df.groupby(['PlaceID', 'ServiceID', 'PlatformID'])['Reach'].sum().reset_index()
+annual_singlePlatform_df['Reach'] = annual_singlePlatform_df['Reach']/gam_info['number_of_weeks']
+annual_singlePlatform_df.to_csv(f"../data/combinePlatforms/social_media_data_{gam_info['file_timeinfo']}_platform_annual.csv")
+
 
 # ## workflow 6
 
-# In[7]:
+# In[155]:
 
 
 full_service_df = pd.crosstab(
@@ -174,7 +208,7 @@ cols = full_service_df.columns
 
 # ### WSL
 
-# In[8]:
+# In[156]:
 
 
 # remove MA / WOR and agg services 
@@ -191,11 +225,11 @@ weekly_ws_df.columns
 
 # Version 1
 
-# In[9]:
+# In[157]:
 
 
 # Define expected platform columns
-platform_cols = ['FBE', 'INS', 'TWI', 'YT-', 'TTK', 'TEL', 'WEI']
+platform_cols = ['FBE', 'INS', 'TWI', 'YT-', 'TTK', 'TEL']
                 
 # Add missing columns with default value 0
 for col in platform_cols:
@@ -207,7 +241,7 @@ for col in platform_cols:
 weekly_ws_df['Max Reach'] = weekly_ws_df[platform_cols].max(axis=1)
 
 
-# In[10]:
+# In[158]:
 
 
 # Step 2: Identify Max Platform
@@ -226,7 +260,7 @@ def get_max_platform(row):
 weekly_ws_df['Max Platform'] = weekly_ws_df.apply(get_max_platform, axis=1)
 
 
-# In[11]:
+# In[159]:
 
 
 # Step 3: Calculate WSC1
@@ -260,7 +294,7 @@ weekly_ws_df[f'{platformID}1'] = weekly_ws_df.apply(calculate_wsc1, axis=1)
 
 # Version 2
 
-# In[12]:
+# In[160]:
 
 
 # Ensure all required columns exist, fill missing ones with 0
@@ -279,7 +313,7 @@ weekly_ws_df[f'{platformID}2'] = (
 
 # combined
 
-# In[13]:
+# In[161]:
 
 
 # Ensure all required columns exist
@@ -312,7 +346,7 @@ weekly_ws_df.head()
 
 # ### MA & Studios
 
-# In[14]:
+# In[162]:
 
 
 ma_wor_df = full_service_df[full_service_df['ServiceID'].isin(['WOR', 'MA-'])]
@@ -332,7 +366,7 @@ weekly_ma_wor_df.head()
 
 # prep the aggregate calculation
 
-# In[15]:
+# In[163]:
 
 
 weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
@@ -340,7 +374,7 @@ weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
 
 # ### ENW
 
-# In[28]:
+# In[164]:
 
 
 # Usage
@@ -351,7 +385,7 @@ enw_df.head()
 
 # ### ENG
 
-# In[29]:
+# In[165]:
 
 
 # Usage
@@ -362,7 +396,7 @@ eng_df.head()
 
 # ### EN2
 
-# In[18]:
+# In[166]:
 
 
 en2_services = ['ENG', 'WOR']
@@ -371,7 +405,7 @@ en2_df = compute_combined_reach(pd.concat([weekly_df, eng_df]), en2_services, 'E
 
 # ### AX2
 
-# In[19]:
+# In[167]:
 
 
 cols = ['PlaceID', 'digiGAM_FOA_WT-']
@@ -422,7 +456,7 @@ ax2_df.head()
 
 # ### ANW
 
-# In[20]:
+# In[168]:
 
 
 anw_services = ['AX2', 'WSE']
@@ -432,7 +466,7 @@ anw_df = compute_combined_reach(pd.concat([weekly_df, ax2_df]), anw_services, 'A
 
 # ### ANY
 
-# In[21]:
+# In[169]:
 
 
 any_services = ['ANW', 'GNL']
@@ -442,7 +476,7 @@ any_df = compute_combined_reach(pd.concat([weekly_df, anw_df]), any_services, 'A
 
 # ### TOT
 
-# In[22]:
+# In[170]:
 
 
 tot_services = ['ANY', 'MA-']
@@ -452,7 +486,7 @@ tot_df = compute_combined_reach(pd.concat([weekly_df, any_df]), tot_services, 'T
 
 # ### ALL
 
-# In[23]:
+# In[171]:
 
 
 all_services = ['TOT', 'WOR']
@@ -462,7 +496,7 @@ all_df = compute_combined_reach(pd.concat([weekly_df, tot_df]), all_services, 'A
 
 # ## finalising
 
-# In[26]:
+# In[172]:
 
 
 final_weekly_df = pd.concat([weekly_df, weekly_ma_wor_df, 
@@ -471,17 +505,26 @@ final_weekly_df = pd.concat([weekly_df, weekly_ma_wor_df,
 
 final_weekly_df['PlatformID'] = platformID
 final_weekly_df['YearGAE'] = gam_info['YearGAE']
+
+
+# # store dataset
+
+# In[173]:
+
+
 final_weekly_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_{platformID}.csv", 
                        index=None)
 
 
-# In[27]:
+# In[174]:
 
 
-final_weekly_df.ServiceID.value_counts()
+final_annual_df = final_weekly_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
+final_annual_df['Reach'] = final_annual_df['Reach'] / gam_info['number_of_weeks']
 
+final_annual_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_annual_{platformID}.csv", 
+                       index=None)
 
-# # store dataset
 
 # In[ ]:
 

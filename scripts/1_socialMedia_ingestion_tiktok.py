@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[18]:
 
+
+from IPython.display import display
 
 import base64
 import json
@@ -19,17 +21,22 @@ import ast
 from sympy import symbols, solve, lambdify
 
 
-# In[2]:
+# In[19]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
-# Now import your modules 
+# Now import your modules
 from config_GAM2025 import gam_info
 
 from security_config import emplifi_key
@@ -37,7 +44,7 @@ from functions import execute_sql_query
 import test_functions
 
 
-# In[3]:
+# In[20]:
 
 
 platformID = 'TTK'
@@ -72,7 +79,7 @@ socialmedia_accounts.sample()
 
 # # ingest data
 
-# In[4]:
+# In[21]:
 
 
 post_url = "https://api.emplifi.io/3/tiktok/profile/posts"
@@ -87,7 +94,7 @@ headers = {
 }
 
 
-# In[5]:
+# In[22]:
 
 
 # function to get insights (post level) from user profile
@@ -176,7 +183,7 @@ def get_post_level_insights(start_date, end_date, profile_id):
     return df
 
 
-# In[6]:
+# In[23]:
 
 
 # Directory to store weekly data
@@ -201,7 +208,7 @@ for profile_id in tqdm(socialmedia_accounts['Channel ID'].unique()):
             
             if df.empty:
                 print(f"⚠️ No data returned for {profile_id} on week {week_str}. Skipping save.")
-                continue
+                break
             else:
                 df["platformID"] = platformID
                 df["profile_id"] = profile_id
@@ -209,55 +216,4 @@ for profile_id in tqdm(socialmedia_accounts['Channel ID'].unique()):
         
             df.to_csv(filename, index=False)
             print(f"✅ Saved to {filename}")
-
-
-# In[7]:
-
-
-country_df = post_level_df.copy()
-
-
-# In[ ]:
-
-
-# Step 1: Parse the stringified list of country-percentage dictionaries
-country_df['parsed_viewers'] = country_df['insights_viewers_by_country'].apply(
-    lambda x: ast.literal_eval(x) if isinstance(x, str) else []
-)
-
-# Step 2: Explode the parsed list into separate rows
-exploded_df = country_df.explode('parsed_viewers').reset_index(drop=True)
-
-# Step 3: Extract 'country' and 'percentage' from each dictionary
-exploded_df[['country', 'percentage']] = exploded_df['parsed_viewers'].apply(
-    lambda entry: pd.Series({
-        'country': entry.get('country') if isinstance(entry, dict) else None,
-        'percentage': entry.get('percentage') if isinstance(entry, dict) else None
-    })
-)
-
-# Step 4: Drop the intermediate column
-exploded_df.drop(columns=['parsed_viewers'], inplace=True)
-exploded_df['country'] = exploded_df['country'].replace('Others', 'ZZ')
-exploded_df['country'] = exploded_df['country'].fillna('ZZ')
-exploded_df.head()
-
-
-# In[ ]:
-
-
-exploded_df = exploded_df.rename(columns={'country': 'TikTok Codes'})
-ttk_country = exploded_df.merge(country_codes[['TikTok Codes', 'PlaceID']], on='TikTok Codes', how='left',
-                 indicator=True)
-
-print(f"mismatches? \n{ttk_country._merge.value_counts()}")
-ttk_country = ttk_country.drop(columns='_merge')
-
-
-# In[ ]:
-
-
-country_cols = ['Channel ID', 'link', 'PlaceID', 'percentage', 'w/c', 'PlatformID']
-ttk_country.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country.csv",
-                  index=None, keep_default_na=False)
 
