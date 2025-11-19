@@ -17,38 +17,38 @@ groups = {
     #    "2_site_processing.py",
     #    "3_site_reach.py"
     #],
-    "facebook": [
+    #"facebook": [
     #    "1_socialMedia_ingestion_facebook_country.py",
     #    "1_socialMedia_ingestion_facebook_engagements.py",
     #    "3_socialMedia_combination_facebook.py",
     #    "4_socialMedia_processing_facebook.py",
-        "5_test_comparingMK_BD_social_fb.py"
-    ],
-    "instagram": [
+    #    "5_test_comparingMK_BD_social_fb.py"
+    #],
+    #"instagram": [
     #    "1_socialMedia_ingestion_instagram_country.py",
     #    "1_socialMedia_ingestion_instagram_engagements.py",
     #    "3_socialMedia_combination_instagram.py",
     #    "4_socialMedia_processing_instagram.py",
-        "5_test_comparingMK_BD_social_ig.py"
-    ],
-    "twitter": [
+    #    "5_test_comparingMK_BD_social_ig.py"
+    #],
+    #"twitter": [
     #    "1_socialMedia_ingestion_twitter_country.py",
     #    "1_socialMedia_ingestion_twitter_engagments.py",
     #    "3_socialMedia_combination_twitter.py",
     #    "4_socialMedia_processing_twitter.py",
-        "5_test_comparingMK_BD_social_twitter.py"
-    ],
-    "youtube": [
+    #    "5_test_comparingMK_BD_social_twitter.py"
+    #],
+    #"youtube": [
     #    "1_socialMedia_ingestion_youtube_analytics.py",
     #    "1_socialMedia_ingestion_youtube_redshift.py",
     #    "3_socialMedia_combination_youtube.py",
     #    "4_socialMedia_processing_youtube.py",
-        "5_test_comparingMK_BD_social_yt.py"
-    ],
+    #    "5_test_comparingMK_BD_social_yt.py"
+    #],
     "tiktok": [
     #    "1_socialMedia_ingestion_tiktok.py",
     #    "3_socialMedia_combination_tiktok.py",
-    #    "4_socialMedia_processing_tiktok.py",
+        "4_socialMedia_processing_tiktok.py",
         "5_test_comparingMK_BD_social_ttk.py"
     ],
     #"telegram": [

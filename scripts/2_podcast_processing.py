@@ -33,7 +33,7 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 
 import test_functions 
 
@@ -43,7 +43,8 @@ import test_functions
 
 # country
 cols = ['Podcast (Redshift raw data)','PlaceID', 'CBC_country']
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[cols]
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)[cols]
 country_codes = country_codes.rename(columns={'Podcast (Redshift raw data)': 'country', 
                                               'PlaceID': 'PlaceID'})
 

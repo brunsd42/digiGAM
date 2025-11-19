@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[9]:
+# In[1]:
 
 
 platformID = 'INS'
 
 
-# In[10]:
+# In[2]:
 
 
 from datetime import datetime
@@ -20,7 +20,7 @@ import psycopg2
 
 # ## import helper 
 
-# In[11]:
+# In[3]:
 
 
 import sys
@@ -36,17 +36,17 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
-
+from config import gam_info
 from functions import execute_sql_query
 import test_functions 
 
 
-# In[12]:
+# In[4]:
 
 
 # country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
@@ -62,7 +62,7 @@ channel_ids = socialmedia_accounts['Channel ID'].tolist()
 
 # # activity
 
-# In[13]:
+# In[5]:
 
 
 metric_ids = ['saved', 
@@ -103,7 +103,7 @@ df['ig_media_id'] = df['ig_media_id'].astype(str)
 df.to_csv(file, index=False, na_rep='')
 
 
-# In[14]:
+# In[6]:
 
 
 ig_views = pd.read_csv(file, keep_default_na=False)
@@ -127,7 +127,7 @@ test_functions.test_weeks_presence('week_ending',
 
 # # metadata
 
-# In[15]:
+# In[7]:
 
 
 sql_query = f""" 
@@ -148,12 +148,12 @@ sql_query = f"""
     """
 
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_metadata_redshift_extract.csv"
-df = execute_sql_query(sql_query)
+'''df = execute_sql_query(sql_query)
 df['ig_user_id'] = df['ig_user_id'].astype(str) 
 df['ig_media_id'] = df['ig_media_id'].astype(str) 
 
 df.to_csv(file, index=False, na_rep='')
-
+'''
 ig_metadata = pd.read_csv(file, keep_default_na=False)
 
 ig_metadata['ig_user_id'] = ig_metadata['ig_user_id'].astype(str) 
@@ -172,7 +172,7 @@ ig_metadata.sample()
 
 # # combine media metrics and their metadata
 
-# In[16]:
+# In[8]:
 
 
 ig_views = ig_views.rename(columns={'ig_metric_end_time': 'week_ending'})
@@ -189,7 +189,7 @@ ig_combine.columns
 
 # ## processing
 
-# In[17]:
+# In[9]:
 
 
 # to get to account level 
@@ -210,7 +210,6 @@ ig_media_to_user = pd.pivot_table(ig_media_to_user,
                                     'ig_metric_period', 'ig_metric_breakdown'],
                              columns='ig_metric_id', 
                              aggfunc='sum').reset_index()
-ig_media_to_user.sample()
 
 # test there is now one row per channel / week
 test_functions.test_duplicates(ig_media_to_user, ['ig_user_id', 'week_ending'], 
@@ -218,63 +217,9 @@ test_functions.test_duplicates(ig_media_to_user, ['ig_user_id', 'week_ending'],
 
 
 
-# In[18]:
-
-
-'''# join week lookup per channel 
-def joining_allWeeks_perChannel(df, x_col, y_col, week_tester, fillna_cols):
-    # Drop all columns except 'week_ending' and 'ig_user_id'
-    reduced_df = df[[x_col, y_col]]
-    
-    # Pivot the dataframe to get columns per channel
-    pivot_df = reduced_df.pivot_table(index=x_col, columns=y_col, aggfunc='size', fill_value=np.nan )
-    
-    # Reset the index to flatten the dataframe
-    pivot_df = pivot_df.reset_index()
-    
-    # Merge with the lookup dataframe to ensure all weeks are included for each channel
-    result_df = week_tester[[x_col]].merge(pivot_df, on=x_col, how='left')
-    
-    # Melt the dataframe back to the original format
-    melted_df = pd.melt(result_df, id_vars=[x_col], var_name=y_col, value_name='count').drop(columns='count')
-    melted_df.sample()
-    
-    # Join back with the rest of the data using a left join
-    final_df = pd.merge(melted_df, df, on=[x_col, y_col], how='left')
-
-    fill_dict = df[fillna_cols].drop_duplicates().set_index(y_col).to_dict()
-    # Extract fill values for each column
-    fill_values = {col: df.set_index(y_col)[col].to_dict() for col in fill_dict.keys()}
-    
-    # Apply fillna for each column
-    for col, values in fill_values.items():
-        final_df[col] = final_df[y_col].map(values).fillna(final_df[col])
-
-    return final_df
-
-ig_media_to_user_allWeeks = joining_allWeeks_perChannel(ig_media_to_user, 'week_ending', 'ig_user_id',
-                                                  week_tester, 
-                                                  ['ig_user_id', 'ig_user_name', 'ig_user_bbc_bus_unit', 'ig_metric_period', 'ig_metric_breakdown']
-                                                       )'''
-
-
-# In[19]:
-
-
-'''
-        
-columns_to_visualize = ['comments', 'impressions', 'likes', 'plays', 
-                        'reach', 'saved', 'shares', 'total_interactions']
-        
-test_functions.see_channel_week_heatmap(ig_media_to_user_allWeeks, columns_to_visualize, 
-                                        'week_ending', 'ig_user_id',
-                                        'ig_user_name', 'ig_user_bbc_bus_unit', 
-                                        'instagram_contentLevel', gam_info)'''
-
-
 # ## user insights
 
-# In[20]:
+# In[10]:
 
 
 # account level (would also contain content level but we don't what this here wil be replaced )
@@ -301,10 +246,10 @@ sql_query = f"""
     ;
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_userInsights_redshift_extract.csv"
-df = execute_sql_query(sql_query)
+'''df = execute_sql_query(sql_query)
 df['ig_user_id'] = df['ig_user_id'].astype(str) 
 df.to_csv(file, index=False, na_rep='')
-
+'''
 ig_userInsights = pd.read_csv(file, keep_default_na=False)
 ig_userInsights['ig_user_id'] = ig_userInsights['ig_user_id'].astype(str) 
 ig_userInsights['ig_metric_end_time'] = pd.to_datetime(ig_userInsights['ig_metric_end_time'])
@@ -318,10 +263,8 @@ test_functions.test_filter_elements_returned(ig_userInsights, metric_ids, column
 test_functions.test_weeks_presence('week_ending', ig_userInsights.rename(columns={'ig_metric_end_time': 'week_ending'}), 
                                    week_tester, '1_IG_10', "ig_user_insights sql query")
 
-ig_userInsights.sample()
 
-
-# In[21]:
+# In[11]:
 
 
 # Pivot the DataFrame
@@ -351,7 +294,7 @@ ig_user_by_userInsights_allWeeks = joining_allWeeks_perChannel(ig_user_by_userIn
 
 # # combine 
 
-# In[22]:
+# In[12]:
 
 
 # excluded from left 'impressions', 'reach'
@@ -374,7 +317,7 @@ test_functions.test_inner_join(ig_media_to_user[left_cols],
 
 # # user metadata redshift query 
 
-# In[23]:
+# In[13]:
 
 
 sql_query = f""" 
@@ -396,16 +339,16 @@ sql_query = f"""
         week_ending BETWEEN '{gam_info['weekEnding_start']}' and '{gam_info['weekEnding_end']}')
     ;
     """
+file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_userMetadata_redshift_extract.csv"
 
-df = execute_sql_query(sql_query)
+'''df = execute_sql_query(sql_query)
 
 df['ig_user_id'] = df['ig_user_id'].astype(str) 
 df['ig_user_ig_id'] = df['ig_user_ig_id'].astype(str) 
 df['ig_user_linked_fb_page_id'] = df['ig_user_linked_fb_page_id'].astype(str) 
 
-file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_userMetadata_redshift_extract.csv"
 df.to_csv(file, index=False, na_rep='')
-
+'''
 ig_userMetadata = pd.read_csv(file, keep_default_na=False)
 
 ig_userMetadata['ig_user_id'] = ig_userMetadata['ig_user_id'].astype(str) 
@@ -423,7 +366,7 @@ test_functions.test_weeks_presence('week_ending', ig_userMetadata,
 ig_userMetadata.sample()
 
 
-# In[24]:
+# In[14]:
 
 
 # just a clean list of the overview columns 
@@ -436,7 +379,7 @@ ig_userMetadata_slim = ig_userMetadata[cols].drop_duplicates()
 ig_userMetadata_slim.shape
 
 
-# In[25]:
+# In[15]:
 
 
 # combine all
@@ -456,7 +399,7 @@ ig_combine_final.to_csv(f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{
 
 # ### milestone II
 
-# In[26]:
+# In[16]:
 
 
 ig_engagements = ig_combine_final.merge(week_tester[['week_ending', 'w/c']], on='week_ending', how='left')
@@ -472,6 +415,11 @@ cols = ['w/c', 'ig_user_id', 'ig_user_name', 'ig_user_bbc_bus_unit',
         'ig_user_ig_id', 'ig_user_username', 'ig_user_linked_fb_page_id',
        'ig_user_bbc_category', 'ig_user_bbc_nation', 'ig_user_bbc_clean_name',
        ]
+ig_engagements['total_interactions'] = ig_engagements['total_interactions'].fillna(0)
+ig_engagements['comments'] = ig_engagements['comments'].fillna(0)
+ig_engagements['likes'] = ig_engagements['likes'].fillna(0)
+ig_engagements['shares'] = ig_engagements['shares'].fillna(0)
+ig_engagements['saved'] = ig_engagements['saved'].fillna(0)
 
 ig_engagements['weekly_media_engagements'] = ig_engagements[cols].apply(
     lambda row: row['total_interactions'] 
@@ -490,7 +438,7 @@ ig_engagements['Channel ID'] = ig_engagements['Channel ID_x'].fillna('Channel ID
 ig_engagements = ig_engagements.drop(columns=['Channel ID_x', 'Channel ID_y'])
 
 
-# In[27]:
+# In[17]:
 
 
 ig_engagements_name_matched = ig_engagements[ig_engagements['_merge'] == 'both']
@@ -520,7 +468,7 @@ ig_engagements_final.to_csv(f"../data/processed/{platformID}/{gam_info['file_tim
 
 # ### Milestone III
 
-# In[28]:
+# In[18]:
 
 
 # Define the multiplier mapping
@@ -532,6 +480,10 @@ service_multipliers = {
     "UKR": 0.76,
     "URD": 0.81
 }
+
+ig_engagements_final['plays'] = ig_engagements_final['plays'].fillna(0)
+ig_engagements_final['impressions'] = ig_engagements_final['impressions'].fillna(0)
+ig_engagements_final['reach'] = ig_engagements_final['reach'].fillna(0)
 
 # Apply the logic to create a new column 'adjusted_reels_plays'
 ig_engagements_final['30 view'] = ig_engagements_final.apply(
@@ -588,6 +540,12 @@ ig_engagements_final['IG Engaged Persian Exception'] = ig_engagements_final.appl
 )
 ig_engagements_final.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_engagements_final.csv", 
                           index=None)
+
+
+# In[19]:
+
+
+ig_engagements_final[(ig_engagements_final['Channel ID'] =='17841401606325704')]
 
 
 # In[ ]:

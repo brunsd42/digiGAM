@@ -39,7 +39,7 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from config_GAM2025 import gam_info
+from config import gam_info
 
 import test_functions 
 import functions 
@@ -51,8 +51,10 @@ import functions
 # country
 pop_size_col = gam_info['population_column']
 cols = ['PlaceID', pop_size_col]
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[cols]
-
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)[cols]
+country_codes[gam_info['population_column']] = pd.to_numeric(
+    country_codes[gam_info['population_column']], errors='coerce')
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
                             sheet_name='GAM Period',)
@@ -94,7 +96,8 @@ full_df = full_df.merge(country_codes, on='PlaceID',
                         how='left', indicator=True)
 print(full_df._merge.value_counts())
 full_df.drop(columns=['_merge'], inplace=True)
-full_df.sample()
+
+full_df = functions.filter_channels_by_weeks(full_df)
 
 
 # # calculate 
@@ -146,7 +149,7 @@ for bu in gam_info['business_units'].keys():
     
         # check for missing values
         # especially in the string columns no values should be missing
-        msno.matrix(channel_uv_by_country)
+        #msno.matrix(channel_uv_by_country)
         
         # fill missing values with 0 - this is good fi the matrix above showed that the string 
         # columns did not have any missings so the only gaps filled are numeric. 
@@ -201,7 +204,7 @@ data[grouped_service]['weekly'] = functions.calculate_weekly_sumServices(wsl_wee
 # ## AX2, ANW, ANY, TOT, ALL, ENG, EN2 ENW
 # 
 
-# In[11]:
+# In[9]:
 
 
 path = f"../data/singlePlatform/{platformID}/"
@@ -218,10 +221,4 @@ stages = [
     ]
 data = functions.calculate_aggregated_services(data, stages, platformID, gam_info, path, overlaps, 
                                                 country_codes, pop_size_col)
-
-
-# In[ ]:
-
-
-
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[55]:
+# In[1]:
 
 
 from IPython.display import display 
@@ -13,7 +13,7 @@ import numpy as np
 from scipy.stats import zscore
 
 
-# In[56]:
+# In[2]:
 
 
 import sys
@@ -29,20 +29,26 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from config_GAM2025 import gam_info
+from config import gam_info
 
 import test_functions 
 import functions 
 
 
-# In[57]:
+# In[24]:
 
 
 # country
 pop_size_col = gam_info['population_column']
 
 country_codes_cols = ['PlaceID', pop_size_col]
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[country_codes_cols]
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)[country_codes_cols]
+country_codes[pop_size_col] = (
+    pd.to_numeric(country_codes[pop_size_col], errors='coerce')
+    .fillna(1)
+    .astype(int)
+)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period',)
@@ -53,7 +59,7 @@ service_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='S
 platform_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='PlatformID',)
 
 
-# In[58]:
+# In[4]:
 
 
 # TODO Add tests (recognising all services, countries, platforms) to all the overlap sheets that are used here 
@@ -97,7 +103,7 @@ africa_dedup_countries = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet
 
 # ### site
 
-# In[59]:
+# In[5]:
 
 
 cols = ['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
@@ -117,7 +123,7 @@ for i, (column, allowed_values) in enumerate(test_columns.items(), start=1):
     test_functions.test_allowed_values(site_weekly_df, column, allowed_values, label, 'site_ingest')
 
 
-# In[60]:
+# In[6]:
 
 
 # are there any duplicates?
@@ -125,7 +131,7 @@ print(site_weekly_df.shape)
 site_weekly_df.drop_duplicates().shape
 
 
-# In[61]:
+# In[7]:
 
 
 # are any entries with missing values? 
@@ -134,7 +140,7 @@ msno.matrix(site_weekly_df)
 
 # ### social
 
-# In[62]:
+# In[8]:
 
 
 social_weekly_df = pd.read_csv("../data/interim/mk_wsc_social_weekly_data.csv")
@@ -165,7 +171,7 @@ social_weekly_df.head()
 
 # ### combine site & social
 
-# In[63]:
+# In[9]:
 
 
 site_social_df = pd.concat([site_weekly_df, social_weekly_df])
@@ -175,7 +181,7 @@ site_social_df = site_social_df.pivot(index=['YearGAE', 'w/c', 'ServiceID', 'Pla
 site_social_df.sample(5)
 
 
-# In[64]:
+# In[10]:
 
 
 non_MA_WOR = site_social_df[~site_social_df['ServiceID'].isin(['WOR', 'MA-'])]
@@ -193,7 +199,7 @@ ma_wor_df = site_social_df[site_social_df['ServiceID'].isin(['WOR', 'MA-'])]
 
 # ### determine & handle outlier
 
-# In[65]:
+# In[11]:
 
 
 # Group by 'service' and 'w/c', summing the numerical columns
@@ -210,7 +216,7 @@ outlier_df = outlier_df[(outlier_df['WSC_z'] > 1.96) | (outlier_df['WDI_z'] > 1.
 outlier_df = outlier_df[['w/c', 'ServiceID']]
 
 
-# In[66]:
+# In[12]:
 
 
 # 2. Identify outliers and non-outliers
@@ -218,7 +224,7 @@ merged_outlier = ws_site_social.merge(outlier_df, on=['w/c', 'ServiceID'], how='
                                    indicator=True)
 
 
-# In[67]:
+# In[13]:
 
 
 outliers = merged_outlier[merged_outlier['_merge'] == 'both']
@@ -298,7 +304,7 @@ outliers = outliers[['PlaceID', 'ServiceID', 'YearGAE', 'w/c',
 
 # ### handle non outlier
 
-# In[68]:
+# In[14]:
 
 
 no_outliers = merged_outlier[merged_outlier['_merge'] == 'left_only']
@@ -359,7 +365,7 @@ no_outliers = no_outliers[['PlaceID', 'ServiceID', 'YearGAE', 'w/c',
 
 # ### calculate WT-
 
-# In[69]:
+# In[15]:
 
 
 ws_site_social_postOutlier = pd.concat([outliers, no_outliers])
@@ -433,14 +439,14 @@ def compute_incremental_partner_reach(row):
 ws_site_social_postOutlier['Reach'] = ws_site_social_postOutlier.apply(compute_incremental_partner_reach, axis=1)
 
 
-# In[70]:
+# In[16]:
 
 
 cols = ['YearGAE', 'w/c', 'ServiceID', 'PlaceID', 'Reach']
 weekly_ws_df =  ws_site_social_postOutlier[cols]
 
 
-# In[71]:
+# In[17]:
 
 
 weekly_ws_df[(weekly_ws_df['PlaceID'] == 'AGU') & 
@@ -451,7 +457,7 @@ weekly_ws_df[(weekly_ws_df['PlaceID'] == 'AGU') &
 
 # ### annual average
 
-# In[72]:
+# In[18]:
 
 
 annual_ws_df = weekly_ws_df.groupby(['YearGAE', 'ServiceID', 'PlaceID'])['Reach'].sum().reset_index()
@@ -461,7 +467,7 @@ annual_ws_df.head()
 
 # ## MA & Studios
 
-# In[73]:
+# In[19]:
 
 
 ma_wor_df = site_social_df[site_social_df['ServiceID'].isin(['WOR', 'MA-'])]
@@ -478,7 +484,7 @@ annual_ma_wor_df['Reach'] = annual_ma_wor_df['Reach'] / gam_info['number_of_week
 
 # ## aggregated services
 
-# In[74]:
+# In[20]:
 
 
 weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
@@ -486,7 +492,7 @@ weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
 weekly_df.head()
 
 
-# In[75]:
+# In[21]:
 
 
 def compute_combined_reach(df, services, label, pop_size_col, country_codes, deal_with_zero=True, 
@@ -530,7 +536,7 @@ def compute_combined_reach(df, services, label, pop_size_col, country_codes, dea
 
 # ### ENW
 
-# In[76]:
+# In[22]:
 
 
 # Usage
@@ -540,7 +546,7 @@ enw_df = compute_combined_reach(weekly_df, enw_services, 'ENW', pop_size_col, co
 
 # ### ENG
 
-# In[77]:
+# In[25]:
 
 
 # Usage
@@ -550,7 +556,7 @@ eng_df = compute_combined_reach(weekly_df, eng_services, 'ENG', pop_size_col, co
 
 # ### EN2
 
-# In[78]:
+# In[26]:
 
 
 en2_services = ['ENG', 'WOR']
@@ -559,7 +565,7 @@ en2_df = compute_combined_reach(pd.concat([weekly_df, eng_df]), en2_services, 'E
 
 # ### AX2
 
-# In[79]:
+# In[27]:
 
 
 ax2_services = [
@@ -603,7 +609,7 @@ ax2_df.head()
 
 # ### ANW
 
-# In[80]:
+# In[28]:
 
 
 anw_services = ['AX2', 'WSE']
@@ -613,7 +619,7 @@ anw_df = compute_combined_reach(pd.concat([weekly_df, ax2_df]), anw_services, 'A
 
 # ### ANY
 
-# In[81]:
+# In[29]:
 
 
 any_services = ['ANW', 'GNL']
@@ -623,7 +629,7 @@ any_df = compute_combined_reach(pd.concat([weekly_df, anw_df]), any_services, 'A
 
 # ### TOT
 
-# In[82]:
+# In[30]:
 
 
 tot_services = ['ANY', 'MA-']
@@ -633,7 +639,7 @@ tot_df = compute_combined_reach(pd.concat([weekly_df, any_df]), tot_services, 'T
 
 # ### ALL
 
-# In[83]:
+# In[31]:
 
 
 all_services = ['TOT', 'WOR']
@@ -643,7 +649,7 @@ all_df = compute_combined_reach(pd.concat([weekly_df, tot_df]), all_services, 'A
 
 # ## finalising 
 
-# In[84]:
+# In[32]:
 
 
 final_weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df, enw_df, eng_df, en2_df, ax2_df, anw_df,
@@ -655,7 +661,7 @@ final_weekly_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_we
                        index=None)
 
 
-# In[85]:
+# In[33]:
 
 
 final_annual_df = final_weekly_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
@@ -669,13 +675,13 @@ final_annual_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_an
 # 
 # ## import data
 
-# In[86]:
+# In[34]:
 
 
 cols = ['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
 
 
-# In[87]:
+# In[35]:
 
 
 podcast_df = pd.read_excel(f"../data/singlePlatform/podcast/weekly/{gam_info['file_timeinfo']}_podcast_data_weekly.xlsx")
@@ -684,7 +690,7 @@ podcast_df = podcast_df[cols]
 podcast_df.head()
 
 
-# In[88]:
+# In[36]:
 
 
 site_df = pd.read_csv(f"../data/singlePlatform/site/weekly/{gam_info['file_timeinfo']}_site_reach_weekly.csv", index_col=0)
@@ -692,7 +698,7 @@ site_df = site_df[cols]
 site_df.head()
 
 
-# In[89]:
+# In[37]:
 
 
 # created from platform in 6.
@@ -707,7 +713,7 @@ social_wsc_df = social_wsc_df[cols]
 social_wsc_df.head()
 
 
-# In[90]:
+# In[38]:
 
 
 # created from dataset per platform file in 5.
@@ -717,7 +723,7 @@ social_platforms_df = social_platforms_df[cols]
 social_platforms_df.head()
 
 
-# In[91]:
+# In[39]:
 
 
 wt_df = pd.read_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_WT-.csv")[cols]
@@ -726,7 +732,7 @@ wt_df.head()
 
 # # combine 
 
-# In[92]:
+# In[40]:
 
 
 sources = {'pod': podcast_df, 

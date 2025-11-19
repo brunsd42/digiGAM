@@ -23,7 +23,7 @@ helper_path = Path(__file__).resolve().parent.parent / "helper"
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from functions import execute_sql_query
 import test_functions
@@ -33,7 +33,8 @@ import test_functions
 
 
 # country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period', index_col=0)

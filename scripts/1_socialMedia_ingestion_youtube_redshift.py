@@ -54,7 +54,7 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from functions import execute_sql_query
 import test_functions
@@ -63,14 +63,9 @@ import test_functions
 # In[4]:
 
 
-gam_info['lookup_file']
-
-
-# In[5]:
-
-
 # country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
@@ -95,13 +90,12 @@ socialmedia_accounts.sample()
 
 # # automated 
 
-# In[6]:
+# In[30]:
 
 
 sql_query = f""" 
     SELECT 
         yt_channel_id, 
-        yt_subscribed_status, 
         yt_country_code,
         yt_metric_id, 
         yt_metric_period, 
@@ -118,8 +112,8 @@ sql_query = f"""
     ;
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_geography_redshift_extract.csv"
-df = execute_sql_query(sql_query)
-    
+
+df = execute_sql_query(sql_query)    
 df.to_csv(file, index=False, na_rep='')
 
 yt_views = pd.read_csv(file, keep_default_na=False)
@@ -143,7 +137,7 @@ test_functions.test_weeks_presence_per_account('week_ending', column_name, yt_vi
 ################################### Testing ################################### 
 
 
-# In[7]:
+# In[8]:
 
 
 # add PlaceID
@@ -160,7 +154,7 @@ test_functions.test_inner_join(yt_views, country_codes[cols], ['YT-_FBE_codes'],
 yt_views_cleanCountry[yt_views_cleanCountry._merge == 'left_only']['YT-_FBE_codes'].unique()
 
 
-# In[8]:
+# In[9]:
 
 
 grouped_df_perCountry = yt_views_cleanCountry.groupby([
@@ -200,7 +194,7 @@ test_functions.test_larger_val(country_proportion,  'country_%', '1_YT_12', test
 
 
 
-# In[9]:
+# In[10]:
 
 
 automated_country = country_proportion
@@ -222,13 +216,13 @@ test_functions.test_merge_row_count(country_proportion, automated_country, '1_YT
 
 # ## import media action
 
-# In[10]:
+# In[11]:
 
 
 country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
 
 
-# In[11]:
+# In[12]:
 
 
 #TODO: review with minnie for individual exports
@@ -275,7 +269,7 @@ channel_ids = {'Aksi Kita Indonesia': 'aksikitaindo', }
 media_action_df['Channel ID'] = media_action_df['Channel ID'].replace(channel_ids)
 
 
-# In[12]:
+# In[13]:
 
 
 _ma_global = media_action_df.groupby(['w/c', 'Channel ID'])['Views'].sum().reset_index()
@@ -285,7 +279,7 @@ ma_country_df['country_%'] = ma_country_df['Views_country'] / ma_country_df['Vie
 ma_country_df = ma_country_df[automated_country.columns]
 
 
-# In[13]:
+# In[14]:
 
 
 youtube_country = pd.concat([automated_country, ma_country_df])
@@ -293,7 +287,7 @@ youtube_country = pd.concat([automated_country, ma_country_df])
 
 # ## import Serbian & Sinhala Dataset
 
-# In[14]:
+# In[15]:
 
 
 ser_sin_df = pd.read_excel(f"../data/raw/{platformID}/serbian sinhala youtube.xlsx", 
@@ -308,7 +302,7 @@ ser_sin_df = ser_sin_df[country_cols]
 ser_sin_df.columns
 
 
-# In[15]:
+# In[16]:
 
 
 # Find rows in additional_df that are NOT in master_df
@@ -320,7 +314,7 @@ youtube_country_2 = pd.concat([youtube_country, additional_rows], ignore_index=T
 
 # # store dataset
 
-# In[16]:
+# In[17]:
 
 
 youtube_country_2.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_country_new.csv", 

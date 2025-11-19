@@ -30,7 +30,7 @@ sys.path.insert(0, str(helper_path))
 from functions import execute_sql_query
 import test_functions
 
-from config_GAM2025 import gam_info
+from config import gam_info
 
 
 # In[4]:

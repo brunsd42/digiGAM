@@ -41,7 +41,7 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from config_GAM2025 import gam_info
+from config import gam_info
 
 import test_functions 
 import functions 
@@ -53,7 +53,8 @@ import functions
 # country
 pop_size_col = gam_info['population_column']
 cols = ['PlaceID', pop_size_col]
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[cols]
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)[cols]
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
@@ -78,7 +79,7 @@ overlaps.head()
 
 # ## import data 
 
-# In[5]:
+# In[25]:
 
 
 full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv")
@@ -89,6 +90,12 @@ full_df = full_df.merge(country_codes, on='PlaceID',
 print(full_df._merge.value_counts())
 full_df.drop(columns=['_merge'], inplace=True)
 full_df.sample()
+
+
+# In[32]:
+
+
+full_df = functions.filter_channels_by_weeks(full_df)
 
 
 # # calculate 
@@ -176,6 +183,12 @@ for bu in gam_info['business_units'].keys():
     
 
 
+# In[23]:
+
+
+data['WSL']['weekly']['ServiceID'].value_counts()
+
+
 # ## AXE
 
 # In[8]:
@@ -217,234 +230,4 @@ stages = [
     ]
 data = functions.calculate_aggregated_services(data, stages, platformID, gam_info, path, overlaps, 
                                                 country_codes, pop_size_col)
-
-
-# ## AX2
-# (WSL + Africa)
-# 
-
-# In[11]:
-
-
-'''grouped_service = 'AX2'
-data[grouped_service] = {'weekly': pd.DataFrame(),
-                         'annual': pd.DataFrame()}'''
-
-
-# In[12]:
-
-
-'''pivot_ax = functions.process_overlap(
-    data=data,
-    service1='FOA',
-    service2='AXE',
-    grouped_service='AX2',
-    overlaps=overlaps,
-    overlap_type='WSL/FOA',
-    overlap_service_id='FOA',
-    platformID=platformID,
-    gam_info=gam_info,
-    path=path,
-    country_codes=country_codes, 
-    pop_size_col=pop_size_col
-)'''
-
-
-# ## ANW
-
-# In[13]:
-
-
-'''grouped_service = 'ANW'
-data[grouped_service] = {'weekly': pd.DataFrame(),
-                         'annual': pd.DataFrame()}
-    
-pivot_anw, annual_anw = functions.process_overlap(
-    data=data,
-    service1='AX2',
-    service2='WSE',
-    grouped_service='ANW',
-    overlaps=overlaps,
-    overlap_type='WSE/WSL',
-    overlap_service_id='AXE',
-    platformID=platformID,
-    gam_info=gam_info,
-    path=path,
-    country_codes=country_codes, 
-    pop_size_col=pop_size_col
-)
-'''
-
-
-# ## ANY 
-# WS + GN
-
-# In[14]:
-
-
-'''grouped_service = 'ANY'
-data[grouped_service] = {'weekly': pd.DataFrame(),
-                         'annual': pd.DataFrame()}
-
-pivot_any, annual_any = functions.process_overlap(
-    data=data,
-    service1='GNL',
-    service2='ANW',
-    grouped_service='ANY',
-    overlaps=overlaps,
-    overlap_type='WSL/GNL',
-    overlap_service_id='ANW',
-    platformID=platformID,
-    gam_info=gam_info,
-    path=path,
-    country_codes=country_codes, 
-    pop_size_col=pop_size_col
-)
-'''
-
-
-# ## TOT 
-# WS GNL MA
-
-# In[15]:
-
-
-'''grouped_service = 'TOT'
-data[grouped_service] = {'weekly': pd.DataFrame(),
-                         'annual': pd.DataFrame()}
-pivot_any, annual_any = functions.process_overlap(
-    data=data,
-    service1='MA-',
-    service2='ANY',
-    grouped_service='TOT',
-    overlap_type='sainsbury',
-    overlap_service_id='-',
-    platformID=platformID,
-    gam_info=gam_info,
-    path=path,
-    country_codes=country_codes, 
-    pop_size_col=pop_size_col
-)
-'''
-
-
-# ## ALL
-# TOT + WOR
-
-# In[16]:
-
-
-'''grouped_service = 'ALL'
-data[grouped_service] = {'weekly': pd.DataFrame(),
-                         'annual': pd.DataFrame()}
-
-pivot_any, annual_any = functions.process_overlap(
-    data=data,
-    service1='TOT',
-    service2='WOR',
-    grouped_service='ALL',
-    overlap_type='sainsbury',
-    overlap_service_id='-',
-    platformID=platformID,
-    gam_info=gam_info,
-    path=path,
-    country_codes=country_codes, 
-    pop_size_col=pop_size_col
-)
-'''
-
-
-# ## ENG
-
-# In[17]:
-
-
-'''grouped_service = 'ENG'
-data[grouped_service] = {'weekly': pd.DataFrame(),
-                         'annual': pd.DataFrame()}
-
-pivot_any, annual_any = functions.process_overlap(
-    data=data,
-    service1='GNL',
-    service2='WSE',
-    grouped_service='ENG',
-    overlap_type='sainsbury',
-    overlap_service_id='-',
-    platformID=platformID,
-    gam_info=gam_info,
-    path=path,
-    country_codes=country_codes, 
-    pop_size_col=pop_size_col
-)
-'''
-
-
-# ## EN2 
-
-# In[18]:
-
-
-'''grouped_service = 'EN2'
-data[grouped_service] = {'weekly': pd.DataFrame(),
-                         'annual': pd.DataFrame()}
-pivot_any, annual_any = functions.process_overlap_v2(
-    data=data,
-    service1='GNL',
-    service2='WSE',
-    grouped_service=grouped_service,
-    overlaps=overlaps,
-    overlap_type='other',
-    overlap_service_id='-',
-    platformID=platformID,
-    gam_info=gam_info,
-    path=path,
-    country_codes=country_codes, 
-    pop_size_col=pop_size_col,
-    service3='WOR'
-)
-'''
-
-
-# ## ENW
-
-# In[19]:
-
-
-'''grouped_service = 'ENW'
-data[grouped_service] = {'weekly': pd.DataFrame(),
-                         'annual': pd.DataFrame()}
-pivot_any, annual_any = functions.process_overlap(
-    data=data,
-    service1='WSE',
-    service2='FOA',
-    grouped_service=grouped_service,
-    overlap_type='sainsbury',
-    overlap_service_id='-',
-    platformID=platformID,
-    gam_info=gam_info,
-    path=path,
-    country_codes=country_codes, 
-    pop_size_col=pop_size_col
-)
-'''
-
-
-# # Consolidation
-
-# In[20]:
-
-
-'''consolidated_dfs = []
-for service in data.keys():
-    consolidated_dfs.append(data[service]['annual'])
-consolidated_df = pd.concat(consolidated_dfs)
-
-totals = consolidated_df[consolidated_df['PlaceID'] == 'Total']
-non_totals = consolidated_df[consolidated_df['PlaceID'] != 'Total']'''
-
-
-# In[ ]:
-
-
-
 

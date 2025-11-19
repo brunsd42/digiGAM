@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[24]:
+# In[1]:
 
 
 from IPython.display import display
@@ -9,7 +9,7 @@ from IPython.display import display
 import pandas as pd
 
 
-# In[25]:
+# In[2]:
 
 
 import sys
@@ -25,11 +25,11 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from config_GAM2025 import gam_info
+from config import gam_info
 import functions
 
 
-# In[26]:
+# In[3]:
 
 
 # Load country mapping
@@ -38,7 +38,7 @@ country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Coun
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
 
-# In[27]:
+# In[4]:
 
 
 # Utility functions
@@ -60,7 +60,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[28]:
+# In[5]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -118,7 +118,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[29]:
+# In[6]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, threshold=0.0001):
@@ -173,7 +173,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[37]:
+# In[9]:
 
 
 datasets = [
@@ -196,7 +196,7 @@ datasets = [
     },
     {
         "name": "Country Percentage",
-        "original_path": "../data/interim/minnie_country_YT_data_2025.csv",
+        "original_path": "../data/interim/yt_country_processed_interim.csv",
         "new_path": f"../data/processed/YT-/{gam_info['file_timeinfo']}_country_new.csv",
         "column_mapping": {
             "Channel": "Channel ID",
@@ -210,7 +210,11 @@ datasets = [
         "preprocess": {
             "standardize_country": False,
             "week_mapping": False
-        }
+        },
+        "notes": '''
+        there is one cahnnel missing that has NaN as country - checking countries there is for that 
+        channel & date both UNK and NaN.
+        '''
     },
     {
         "name": "GNL Weekly",
@@ -244,7 +248,10 @@ datasets = [
         "preprocess": {
             "standardize_country": True,
             "week_mapping": True
-        }
+        },
+        "notes": """
+        missing are SER & SIN because I have placeID for them and with minnie they are missing
+        """
     },
     {
         "name": "WOR Weekly",
@@ -261,7 +268,11 @@ datasets = [
         "preprocess": {
             "standardize_country": True,
             "week_mapping": True
-        }
+        },
+        "notes": """
+        missing are additional rows in minnie's dataset that have missing values for placeid and reach
+        """
+        
     },
     {
         "name": "WSE Weekly",
@@ -280,7 +291,7 @@ datasets = [
             "week_mapping": True
         }
     },
-    {
+        {
         "name": "MA- Weekly",
         "original_path": "../test/alteryx_datasets/mk_weekly_MA_YT.csv",
         "new_path": "../data/singlePlatform/YT-/weekly/GAM2025_WEEKLY_YT-_MA-byCountry.xlsx",
@@ -295,7 +306,10 @@ datasets = [
         "preprocess": {
             "standardize_country": True,
             "week_mapping": True
-        }
+        },
+        "notes": """
+            total should have been filtered out
+        """
     },
     {
         "name": "FOA Weekly",
@@ -470,7 +484,7 @@ datasets = [
 ]
 
 
-# In[38]:
+# In[10]:
 
 
 # Execute comparisons
@@ -503,18 +517,7 @@ for ds in datasets:
         # add w/c using Week Number
         orig = orig.merge(week_map, left_on='Week Number', right_on='WeekNumber_finYear',
                                               how='left').drop(columns=['Week Number', 'WeekNumber_finYear'])
-
-    '''# Special preprocessing for Country Percentage dataset
-    if ds["name"] in ["GNL Weekly", "WSL Weekly", "WOR Weekly", 
-                      "WSE Weekly", "MA- Weekly", "FOA Weekly", 
-                      "AXE Weekly", "AX2 Weekly", "ANW Weekly",
-                      "ANY Weekly", "TOT Weekly", "ALL Weekly",
-                     ]:
         
-        # Rename 'Country' to 'YouTube Codes' in original data and merge with mapping
-        orig = orig.merge(week_map, left_on='Week Number', right_on='WeekNumber_finYear',
-                                              how='left').drop(columns=['Week Number', 'WeekNumber_finYear'])
-    '''
     # Ensure 'w/c' columns are datetime in both DataFrames
     if 'w/c' in orig.columns:
         orig['w/c'] = pd.to_datetime(orig['w/c'], errors='coerce')

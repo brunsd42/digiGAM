@@ -20,6 +20,9 @@ import numpy as np
 import ast
 from sympy import symbols, solve, lambdify
 
+import missingno as msno
+import matplotlib.pyplot as plt
+
 
 # In[2]:
 
@@ -37,7 +40,7 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from security_config import emplifi_key
 from functions import execute_sql_query
@@ -131,9 +134,6 @@ week_counts = week_counts.sort_values(by='number_of_weeks', ascending=False)
 
 # Display 
 print(week_counts)
-
-import missingno as msno
-import matplotlib.pyplot as plt
 
 # Assuming post_level_df is already loaded and contains 'profile_id' and 'w/c'
 # Create a pivot table: profiles as rows, weeks as columns
@@ -401,29 +401,42 @@ exploded_df['country'] = exploded_df['country'].replace('Others', 'ZZ')
 exploded_df['country'] = exploded_df['country'].fillna('ZZ')
 
 
-# In[16]:
+# In[20]:
 
 
 exploded_df = exploded_df.rename(columns={'country': 'TikTok Codes'})
-ttk_country = exploded_df.merge(country_codes[['TikTok Codes', 'PlaceID']], on='TikTok Codes', how='left',
+ttk_country_all = exploded_df.merge(country_codes[['TikTok Codes', 'PlaceID']], on='TikTok Codes', how='left',
                  indicator=True)
 
-print(f"mismatches? \n{ttk_country._merge.value_counts()}")
-ttk_country = ttk_country.drop(columns='_merge')
+print(f"mismatches? \n{ttk_country_all._merge.value_counts()}")
+ttk_country_all = ttk_country_all.drop(columns='_merge')
 
+# Remove unknown countries (UNK)
+ttk_country = ttk_country_all[ttk_country_all['PlaceID'] != 'UNK'].copy()
 
-# In[17]:
+# Compute sum of percentages per video
+sum_per_video = ttk_country.groupby('id')['percentage'].transform('sum')
 
+# Rescale percentages
+ttk_country['rescaled_percentage'] = ttk_country['percentage'] / sum_per_video
 
-country_cols = ['Channel ID', 'link', 'PlaceID', 'percentage', 'w/c', 'PlatformID']
+# Optional: Check that each video sums to 1
+check = ttk_country.groupby('id')['rescaled_percentage'].sum()
+check[~np.isclose(check, 1, atol=1e-6)]
+
+country_cols = ['Channel ID', 'link', 'PlaceID', 'rescaled_percentage', 'w/c', 'PlatformID']
 ttk_country= ttk_country[country_cols]
 ttk_country.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country.csv",
                   index=None, na_rep='')
 
 
 # # combine views & country
+# 
+# country is a percentage by video. In the next section the actual metric is calculated (video views) per country. This is then summed to the profile level. 
+# As the average is larger than 1 the country view is rebased 
+# 
 
-# In[19]:
+# In[21]:
 
 
 # post_url: link
@@ -435,62 +448,26 @@ views_scaled = views_scaled.drop(columns=['_merge'], errors='ignore')
 ttk_data = ttk_country.merge(views_scaled, on=['Channel ID', 'link', 'w/c'], how='outer',
                                 indicator=True)
 print(f"mismatches between datasets! unreviewed yet\n {ttk_data._merge.value_counts()}")
-ttk_data = ttk_data.drop(columns=['_merge'])
+ttk_data = ttk_data[ttk_data['_merge'] == 'both'].drop(columns=['_merge'])
 
-ttk_data['country_views'] = ttk_data["final_video_views"] * ttk_data["percentage"]
+ttk_data['country_views_video_level'] = ttk_data["final_video_views"] * ttk_data["rescaled_percentage"]
 ttk_perCountry = ttk_data.groupby(['w/c', 'Channel ID', 'ServiceID',
-                                'PlaceID'])['country_views'].sum().rename('country').reset_index()
+                                'PlaceID'])['country_views_video_level'].sum().rename('country_views_profile_level').reset_index()
 ttk_global = ttk_data.groupby(['w/c', 'ServiceID','Channel ID', 
-                              ])['country_views'].sum().rename('global').reset_index()
+                              ])['country_views_video_level'].sum().rename('global_views_profile_level').reset_index()
 
 ttk_df = ttk_perCountry.merge(ttk_global, on=['ServiceID', 'w/c', 'Channel ID'], how='outer', 
                            indicator=True)
 print(f"no mismatches \n {ttk_df._merge.value_counts()}")
 ttk_df = ttk_df.drop(columns=['_merge'])
 
-ttk_df['country_%'] = ttk_df['country']/ttk_df['global']
-ttk_df.head()
+ttk_df['profile_country_views_%'] = ttk_df['country_views_profile_level']/ttk_df['global_views_profile_level']
 
-
-# In[20]:
-
-
-annual_ttk_country = ttk_df.groupby(['Channel ID', 'ServiceID', 'PlaceID'])['country_%'].mean().rename('AvgCountry%').reset_index()
-annual_ttk_global = annual_ttk_country.groupby(['Channel ID', 'ServiceID' ])['AvgCountry%'].sum().rename('AvgGlobal%').reset_index()
-
-annual_ttk_df = annual_ttk_country.merge(annual_ttk_global, on=['Channel ID', 'ServiceID'], how='outer', indicator=True)
-print(f"no mismatches \n {annual_ttk_df._merge.value_counts()}")
-annual_ttk_df = annual_ttk_df.drop(columns=['_merge'])
-
-annual_ttk_df['country_%'] = annual_ttk_df['AvgCountry%']/annual_ttk_df['AvgGlobal%']
-
-annual_ttk_df.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uV_country.csv",
-                       index=None)
-
-
-# In[21]:
-
-
-temp = annual_ttk_df.merge(country_codes[['PlaceID', gam_info['population_column']]],
-                           on='PlaceID', how='left', indicator=True)
-temp['_merge'].value_counts()
-temp = temp.drop(columns='_merge')
-
-temp = temp[temp['PlaceID'] != 'UNK']
-temp_grouped = temp.groupby(['Channel ID', 'ServiceID'])['country_%'].sum().rename('sum_country_%').reset_index()
-
-temp2 = temp.merge(temp_grouped, on=['Channel ID', 'ServiceID'], how='outer', indicator=True)
-temp2._merge.value_counts()
-temp2 = temp2.drop(columns='_merge')
-
-temp2['country_%'] = temp2['country_%'] / temp2['sum_country_%']
-
-temp3 = temp2.merge(views_scaled, on=['Channel ID', 'ServiceID'], how='outer', indicator=True)
-temp3['uv_by_country'] =  temp3['engaged_users'] * temp3['country_%']
-
+ttk_df = ttk_df.merge(views_scaled, on=['ServiceID', 'Channel ID', 'w/c'], how='inner')
+ttk_df['uv_by_country'] =  ttk_df['engaged_users'] * ttk_df['profile_country_views_%']
 
 cols = ['w/c', 'PlaceID', 'ServiceID', 'Channel ID', 'uv_by_country', ]
-temp3[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv", 
+ttk_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv", 
                      index=None)
 
 

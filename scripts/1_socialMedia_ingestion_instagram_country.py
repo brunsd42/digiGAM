@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[2]:
 
 
 platformID = 'INS'
 
 
-# In[2]:
+# In[3]:
 
 
 from datetime import datetime
@@ -20,24 +20,29 @@ import psycopg2
 
 # ## import helper 
 
-# In[4]:
+# In[5]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from functions import execute_sql_query
 import test_functions 
 
 
-# In[5]:
+# In[6]:
 
 
 # country
@@ -55,7 +60,7 @@ socialmedia_accounts = pd.read_excel(f"../helper/ins_account_lookup.xlsx")
 
 # # ingestion
 
-# In[6]:
+# In[8]:
 
 
 sql_query = f""" 
@@ -106,6 +111,25 @@ ig_country_df_sum['country_%'] = ig_country_df_sum['ig_metric_value'] / ig_count
 
 ig_country_df_sum.to_csv(f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_geog.csv", 
                            index=None)
+
+
+# In[10]:
+
+
+df.sample()
+
+
+# In[12]:
+
+
+df['ig_user_name'].unique()
+
+
+# In[11]:
+
+
+# can't find this channel 17841402094893665 ()
+df['ig_user_id'].sort_values().unique()
 
 
 # In[7]:

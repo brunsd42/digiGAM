@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[18]:
+# In[1]:
 
 
 from IPython.display import display
@@ -21,7 +21,7 @@ import ast
 from sympy import symbols, solve, lambdify
 
 
-# In[19]:
+# In[2]:
 
 
 import sys
@@ -37,14 +37,14 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from security_config import emplifi_key
 from functions import execute_sql_query
 import test_functions
 
 
-# In[20]:
+# In[3]:
 
 
 platformID = 'TTK'
@@ -72,33 +72,37 @@ socialmedia_accounts = socialmedia_accounts[(socialmedia_accounts['PlatformID'] 
                                             (socialmedia_accounts['Status'] == 'active')]
 socialmedia_accounts = socialmedia_accounts.rename(columns={'Excluding UK': 'Channel Group'})
 
-channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
-formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
 socialmedia_accounts.sample()
 
 
 # # ingest data
 
-# In[21]:
+# In[4]:
 
 
 post_url = "https://api.emplifi.io/3/tiktok/profile/posts"
                
 # create secret token for API authentication
-secret_token = f"{emplifi_key['access_token']}:{emplifi_key['secret']}"
+secret_token = f"{emplifi_key['BAU']['access_token']}:{emplifi_key['BAU']['secret']}"
 encoded_secret_token = base64.b64encode(secret_token.encode('utf-8')).decode('utf-8')
 
 # authentication using secret token
-headers = {
+headers_bau = {
     "Authorization": f"Basic {encoded_secret_token}"
 }
 
+# create secret token for API authentication
+secret_token = f"{emplifi_key['Studios']['access_token']}:{emplifi_key['Studios']['secret']}"
+encoded_secret_token = base64.b64encode(secret_token.encode('utf-8')).decode('utf-8')
 
-# In[22]:
+headers_studios = {"Authorization": f"Basic {encoded_secret_token}"}
+
+
+# In[5]:
 
 
 # function to get insights (post level) from user profile
-def get_post_level_insights(start_date, end_date, profile_id):
+def get_post_level_insights(start_date, end_date, profile_id, headers):
 
     total_posts = [] # create empty list to contain the posts
     after_param = None # after parameter for going to the next page (Pagination)
@@ -183,14 +187,16 @@ def get_post_level_insights(start_date, end_date, profile_id):
     return df
 
 
-# In[23]:
+# In[7]:
 
 
 # Directory to store weekly data
 storage_dir = f"../data/raw/{platformID}/post_level/"
 os.makedirs(storage_dir, exist_ok=True)
 
-for profile_id in tqdm(socialmedia_accounts['Channel ID'].unique()):
+channel_access_dict = socialmedia_accounts.set_index('Channel ID')['Access'].to_dict()
+
+for profile_id, access in tqdm(channel_access_dict.items()):
     # Sort weeks from newest to oldest
     for week in week_tester['w/c'].sort_values(ascending=False):
         
@@ -204,8 +210,14 @@ for profile_id in tqdm(socialmedia_accounts['Channel ID'].unique()):
             continue
         else:
             print(f"🔄 Fetching data for {profile_id} on week {week_str}...")
-            df = get_post_level_insights(week_str, end_date.strftime("%Y-%m-%d"), profile_id)
-            
+            if access == 'BAU':
+                df = get_post_level_insights(week_str, end_date.strftime("%Y-%m-%d"), 
+                                             profile_id, headers_bau)
+            elif access == 'Studios':
+                print("using Studios access")
+                df = get_post_level_insights(week_str, end_date.strftime("%Y-%m-%d"), 
+                                             profile_id, headers_studios)
+                
             if df.empty:
                 print(f"⚠️ No data returned for {profile_id} on week {week_str}. Skipping save.")
                 break
@@ -216,4 +228,10 @@ for profile_id in tqdm(socialmedia_accounts['Channel ID'].unique()):
         
             df.to_csv(filename, index=False)
             print(f"✅ Saved to {filename}")
+
+
+# In[ ]:
+
+
+
 

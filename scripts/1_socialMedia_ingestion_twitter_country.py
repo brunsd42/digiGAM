@@ -3,13 +3,13 @@
 
 # country isn't updated anymore so we are using an old year 
 
-# In[10]:
+# In[1]:
 
 
 platformID = 'TWI'
 
 
-# In[11]:
+# In[2]:
 
 
 from datetime import datetime
@@ -20,28 +20,34 @@ import psycopg2
 
 # ## import helper
 
-# In[12]:
+# In[3]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from functions import execute_sql_query
 import test_functions
 
 
-# In[13]:
+# In[4]:
 
 
 # country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
@@ -67,7 +73,7 @@ formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_id
 
 # # country
 
-# In[17]:
+# In[5]:
 
 
 # takes forever to load
@@ -83,7 +89,7 @@ tw_country_df = tw_country_df.rename(columns={'Week Number': 'WeekNumber_finYear
 tw_country_df.sample()
 
 
-# In[18]:
+# In[6]:
 
 
 # test accounts 
@@ -94,7 +100,7 @@ test_functions.test_filter_elements_returned(tw_country_df, channel_ids, column_
 # 
 
 
-# In[19]:
+# In[7]:
 
 
 tw_country_df.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country.csv", 

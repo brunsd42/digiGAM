@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[66]:
+# In[1]:
 
 
 platformID = 'TTK'
 
 
-# In[67]:
+# In[2]:
 
 
 from IPython.display import display
@@ -15,7 +15,7 @@ from IPython.display import display
 import pandas as pd
 
 
-# In[68]:
+# In[3]:
 
 
 import sys
@@ -31,20 +31,21 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from config_GAM2025 import gam_info
+from config import gam_info
 import functions
 
 
-# In[69]:
+# In[4]:
 
 
 # Load country mapping
-country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
+country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)[['PlaceID', 'YT-_FBE_codes']]
 # Load country mapping
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
 
-# In[70]:
+# In[5]:
 
 
 # Utility functions
@@ -66,7 +67,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[71]:
+# In[6]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -129,7 +130,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[72]:
+# In[7]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, 
@@ -186,7 +187,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[73]:
+# In[8]:
 
 
 # Dataset configuration
@@ -521,9 +522,32 @@ datasets = [
 ]
 
 
-# In[74]:
+# In[29]:
 
 
+datasets = [
+        {
+        "name": "TikTok GNL Platform",
+        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/Weekly TikTok GNL.xlsx",
+        "new_path": f"../data/singlePlatform/TTK/weekly/GAM2025_WEEKLY_TTK_GNLbyCountry.xlsx",
+        "column_mapping": {
+            'w/c': 'w/c', 
+            'Country Code': 'PlaceID', 
+            'Service Code': 'ServiceID', 
+            'Platform': 'PlatformID',
+            'Reach': 'Reach',
+        },
+        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": True
+        },
+        "comment": """  
+        
+        """
+    },
+]
 # Execute comparisons
 for ds in datasets:
     print(f"\n--- Processing {ds['name']} ---")
@@ -579,4 +603,40 @@ for ds in datasets:
             display(different)
     else:
         display(different)
+
+
+# In[33]:
+
+
+new['PlaceID'].sort_values().unique()
+
+
+# In[27]:
+
+
+orig.shape
+
+
+# In[28]:
+
+
+missing.ServiceID.unique()
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
 

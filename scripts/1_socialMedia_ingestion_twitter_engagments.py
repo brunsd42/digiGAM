@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[4]:
+# In[1]:
 
 
 platformID = 'TWI'
 
 
-# In[5]:
+# In[2]:
 
 
 from datetime import datetime
@@ -18,7 +18,7 @@ import psycopg2
 
 # ## import helper
 
-# In[6]:
+# In[3]:
 
 
 import sys
@@ -34,17 +34,18 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from functions import execute_sql_query
 import test_functions
 
 
-# In[7]:
+# In[4]:
 
 
 # country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
@@ -56,8 +57,7 @@ dtype_dict = {'Channel ID': 'str',
               'Linked FB Account': 'str'}
 socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
                                      sheet_name='Social Media Accounts new')
-
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
+#socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
 socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
 socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
 socialmedia_accounts['Channel ID'] = socialmedia_accounts['Channel ID'].dropna().apply(lambda x: str(int(x)))
@@ -70,7 +70,7 @@ formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_id
 
 # ## activity
 
-# In[8]:
+# In[5]:
 
 
 metric_ids = ['tweet media engagements', 
@@ -105,6 +105,7 @@ file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_activ
 df = execute_sql_query(sql_query)
 df.to_csv(file, index=False, na_rep='')
 
+
 twitter_activity_raw = pd.read_csv(file, keep_default_na=False)
 twitter_activity_raw['tw_account_id'] = twitter_activity_raw['tw_account_id'].apply(lambda x: str(int(x)))
 
@@ -120,88 +121,51 @@ test_functions.test_weeks_presence('week_ending',
                                     twitter_activity_raw.rename(columns={'tw_metric_end_time': 'week_ending'}), 
                                     week_tester, '1_TW_3', "tw_account_insights sql query")
 
+twitter_activity_raw = twitter_activity_raw.rename(columns={'tw_metric_end_time': 'week_ending'})
+twitter_activity_raw = twitter_activity_raw.merge(week_tester[['w/c', 'WeekNumber_finYear', 'week_ending']], on='week_ending', how='left', 
+                       indicator=True)
+
+print(twitter_activity_raw._merge.value_counts())
+twitter_activity_raw = twitter_activity_raw.drop(columns=['_merge', 'week_ending'])
 
 
-# In[9]:
+# In[6]:
 
 
 # Perform crosstab operation
 twitter_activity = pd.pivot_table(twitter_activity_raw, 
                              values='tw_metric_value', 
-                             index=['tw_account_id', 'tw_metric_period', 'tw_metric_end_time', 'tw_metric_breakdown'], 
+                             index=['tw_account_id', 'tw_metric_period', 
+                                    'w/c', 'WeekNumber_finYear',
+                                    'tw_metric_breakdown'], 
                              columns='tw_metric_id', 
                              aggfunc='sum').reset_index()
 
 # test there is now one row per channel / week
-test_functions.test_duplicates(twitter_activity, ['tw_account_id', 'tw_metric_end_time'], 
+test_functions.test_duplicates(twitter_activity, ['tw_account_id', 'w/c'], 
                                "1_TW_4", "reshaping twitter data to get metric per week & channel")
 
-test_functions.test_weeks_presence_per_account('week_ending', 'tw_account_id', 
-                                               twitter_activity.rename(columns={'tw_metric_end_time': 'week_ending'}), 
-                                               week_tester, '1_TW_5', test_step='reshaping activity data')
+test_functions.test_weeks_presence_per_account('w/c', 'tw_account_id', twitter_activity, 
+                                               week_tester, '1_TW_5', 
+                                               test_step='reshaping activity data')
 
 
-# ## metadata
 
-# In[10]:
-
-
-sql_query = f"""
-    SELECT 
-        tw_account_id, 
-        tw_account_name, 
-        tw_account_username, 
-        tw_account_bbc_clean_name, 
-        tw_account_bbc_bus_unit, 
-        week_ending, 
-        week_commencing
-    FROM
-        redshiftdb.central_insights.tw_account_metadata
-    WHERE
-        tw_account_id IN ({formatted_channel_ids}) 
-        AND
-        week_ending Between '{gam_info['weekEnding_start']}' and '{gam_info['weekEnding_end']}'
-;
-"""
-file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_metadata_redshift_extract.csv"
-df = execute_sql_query(sql_query)
-df.to_csv(file, index=False, na_rep='')
-
-twitter_metadata = pd.read_csv(file, keep_default_na=False)
-twitter_metadata['tw_account_id'] = twitter_metadata['tw_account_id'].apply(lambda x: str(int(x)))
-twitter_metadata['week_ending'] = pd.to_datetime(twitter_metadata['week_ending'])
-column_name = 'tw_account_id'
-test_functions.test_filter_elements_returned(twitter_metadata, channel_ids, column_name, 
-                                             '1_TW_6', test_step= 'sql query tw_account_metadata - channels')
-
-test_functions.test_weeks_presence('week_ending', 
-                                    twitter_activity_raw.rename(columns={'tw_metric_end_time': 'week_ending'}), 
-                                    week_tester, '1_TW_7', "tw_account_metadata sql query")
+# In[7]:
 
 
-# ## combine
-
-# In[11]:
-
-
-twitter_activity = twitter_activity.rename(columns={'tw_metric_end_time': 'week_ending', 
-                                                    'week_commencing': 'w/c'}, 
-                                                    )
-twitter_activity_metadata = twitter_activity.merge(twitter_metadata, how='inner',
-                                    on=['tw_account_id', 'week_ending'])
-
-test_functions.test_inner_join(twitter_activity, twitter_metadata, ['tw_account_id', 'week_ending'],
-                               '1_TW_8', test_step="combining activity & metadata ")
-
-
-# In[12]:
-
-
+cols = ['tw_account_id', 'w/c', 'WeekNumber_finYear', 'tw_metric_breakdown',
+       'tweet engagements', 'tweet media engagements', 'video_minutes_viewed',
+       'video_playback_25', 'video_playback_50', 'video_video_views']
 # adress those are lost 
-twitter_activity_metadata.drop_duplicates().to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv")
+twitter_activity[cols].drop_duplicates().to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv", 
+                                                index=None)
 
-twitter_activity_metadata['week_ending'] = pd.to_datetime(twitter_activity_metadata['week_ending'])
-twitter_activity_metadata = twitter_activity_metadata.merge(week_tester[['week_ending', 'WeekNumber_finYear']], on='week_ending', how='left')
+
+# In[8]:
+
+
+twitter_activity.head()
 
 
 # In[ ]:

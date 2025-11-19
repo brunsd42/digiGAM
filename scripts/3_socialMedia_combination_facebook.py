@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[50]:
+# In[1]:
 
 
 platformID = 'FBE'
@@ -9,7 +9,7 @@ platformID = 'FBE'
 
 # ## import libraries
 
-# In[51]:
+# In[2]:
 
 
 import os
@@ -34,24 +34,29 @@ import psycopg2
 
 # ## import helper 
 
-# In[52]:
+# In[3]:
 
 
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from functions import execute_sql_query
 import test_functions
 
 
-# In[54]:
+# In[4]:
 
 
 # country
@@ -81,7 +86,7 @@ socialmedia_accounts.dtypes
 
 # # Unique Viewers
 
-# In[55]:
+# In[5]:
 
 
 facebook_engagements_reach = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv",)
@@ -91,7 +96,7 @@ facebook_engagements_reach['Channel ID'] = facebook_engagements_reach['Channel I
 
 # # Country
 
-# In[56]:
+# In[6]:
 
 
 country_raw = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_COUNTRY.csv")
@@ -104,22 +109,27 @@ country_df = country_raw[cols].rename(columns={"fb_page_id": "Channel ID"})
 country_df.head()
 
 
-# In[57]:
+# In[7]:
 
 
-'''# test for duplicates in ['fb_page_id', 'w/c', 'Country Code', 'country_%']
-country_df = country_raw.merge(country_codes.rename(columns={'YouTube Codes': 'Country Code'})[['Country Code', 'PlaceID', gam_info['population_column]]],
-                               on='Country Code', how='left', indicator=True)
-# test for clean merge
-#print(country_df._merge.value_counts())
-country_df = country_df.drop(columns=['_merge'])
-country_df.dtypes
-'''
-avg_country_df = country_df.groupby(['Channel ID', 'PlaceID'])['country_%'].mean().reset_index()
-avg_country_df.head()
+# get 
+country_lastYear = pd.read_excel(f"../data/interim/2024_Facebook Engagements & Country.xlsx", 
+                                 sheet_name='Weekly FB Country USE')
+country_lastYear = country_lastYear.rename(columns={
+    'FB Page ID': 'Channel ID', 
+    'Country Code': 'YT-_FBE_codes', 
+    'country %': 'country_%'
+})
+country_lastYear['Channel ID'] = country_lastYear['Channel ID'].apply(lambda x: str(int(x)))
+
+country_lastYear = country_lastYear.merge(country_codes[['YT-_FBE_codes', 'PlaceID']], on=['YT-_FBE_codes'], how='left', 
+                                          indicator=True)
+print(country_lastYear._merge.value_counts())
+country_lastYear['PlaceID'] = country_lastYear['PlaceID'].fillna('UNK')
+avg_country_df = country_lastYear.groupby(['Channel ID', 'PlaceID'])['country_%'].mean().reset_index()
 
 
-# In[58]:
+# In[8]:
 
 
 reach_df_raw = facebook_engagements_reach.merge(country_df, on=['Channel ID', 'w/c'], how='outer', 
@@ -132,18 +142,27 @@ reach_df_avg = reach_df_left[facebook_engagements_reach.columns].merge(avg_count
                                     on=['Channel ID'], how='left', indicator=True)
 
 reach_df = pd.concat([reach_df_inner, reach_df_avg])
-reach_df.head()
 
 
-# In[61]:
+# In[9]:
 
 
+metric_col = ['country_%', 'Engaged Reach']
+for col in metric_col:
+    reach_df[col] = reach_df[col].fillna(0)
+    
 reach_df['uv_by_country'] = reach_df['country_%'] * reach_df['Engaged Reach']
 reach_df = reach_df.drop_duplicates()
 
 cols = ['w/c', 'PlaceID', 'ServiceID', 'Channel ID', 'uv_by_country']
 reach_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv", 
                      index=None)
+
+
+# In[ ]:
+
+
+
 
 
 # In[ ]:

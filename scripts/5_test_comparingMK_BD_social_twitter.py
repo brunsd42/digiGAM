@@ -6,13 +6,13 @@
 # - also minnie's weekly gnl dataset is missing week 51 & 52? 
 # - 
 
-# In[32]:
+# In[1]:
 
 
 platformID = 'TWI'
 
 
-# In[33]:
+# In[2]:
 
 
 from IPython.display import display
@@ -21,7 +21,7 @@ import pandas as pd
 pd.set_option('display.float_format', '{:.0f}'.format)
 
 
-# In[34]:
+# In[3]:
 
 
 import sys
@@ -37,20 +37,21 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 import functions
 
 
-# In[35]:
+# In[4]:
 
 
 # Load country mapping
-country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
+country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)[['PlaceID', 'YT-_FBE_codes']]
 # Load country mapping
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
 
-# In[36]:
+# In[5]:
 
 
 # Utility functions
@@ -72,7 +73,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[37]:
+# In[6]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -130,7 +131,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[38]:
+# In[7]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, threshold=0.0001):
@@ -185,95 +186,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[39]:
-
-
-# Dataset configuration
-datasets = [
-    
-    {
-        "name": "Engagements",
-        "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/data/final data/TW_GAM2025_REDSHIFT.xlsx",
-        "new_path": f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv",
-        "column_mapping": {
-            "tw_account_id": "tw_account_id",
-            "week_commencing": "w/c",
-            "tweet_engagements": "tweet engagements"
-        },
-        "key_columns": ["tw_account_id", "w/c"],
-        "method": "integer",
-        "preprocess": {
-            "standardize_country": False,
-            "week_mapping": False
-        },
-        "notes": "262 accounts in minnie's dataset - I suspect she got all accounts the BBC has "
-    },
-    
-    {
-        "name": "pre Business Unites",
-        "original_path": "../helper/tw_minnie_preBU.csv",
-        "new_path": f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer_country.csv",
-        "column_mapping": {
-            'w/c': 'w/c', 
-            'Country Code': 'PlaceID', 
-            'Service Code': 'ServiceID', 
-            'TW Account ID': 'Channel ID', 
-            'Twitter Engaged Users by Country': 'uv_by_country'
-        },
-        "key_columns": ["Channel ID", "w/c", 'PlaceID', 'ServiceID'],
-        "method": "integer",
-        "preprocess": {
-            "standardize_country": False,
-            "week_mapping": True
-        },
-        "notes": ""
-    },
-    {
-        "name": "GNL Weekly",
-        "original_path": "../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Twitter GNL.xlsx",
-        "new_path": "../data/singlePlatform/TWI/weekly/GAM2025_WEEKLY_TWI_GNLbyCountry.xlsx",
-        "column_mapping": {
-            "Service Code": "ServiceID",
-            "Country Code": "PlaceID",
-            "Twitter Engaged Users by Country": "Reach",
-            "w/c": "w/c"
-        },
-        "key_columns": ["ServiceID", "PlaceID", "w/c"],
-        "method": "integer",
-        "preprocess": {
-            "standardize_country": True,
-            "week_mapping": True
-        },
-        "notes": """the missing are all from the last two weeks. 
-        I don't see these values in the alteryx workflow either so not sure where they come from in 
-        the output file. 
-        differences: looking at the biggest difference I fidn the same value from my calculation in
-        alteryx but the excel sheet has a different number... """
-    },
-]
-'''{
-        "name": "Country",
-        "original_path": "../../../../Research Projects/GAM/Digital GAM/2024/Social Media/data/Final Raw/Twitter Engagements inc country.xlsx",
-        "new_path": f'../data/raw/{platformID}/stale_Twitter Engagements inc country.xlsx',
-        "column_mapping": {
-            "TW Account ID": "tw_account_id",
-            "TW Service Code": 'ServiceID', 
-            "Country": "PlaceID",
-            "Week Number": "Week Number",
-            "Engagement %": "country_%"
-        },
-        "key_columns": ["tw_account_id", "w/c", "PlaceID", "ServiceID"],
-        "method": "percentage",
-        "threshold": 0.0001,
-        "preprocess": {
-            "standardize_country": False,
-            "week_mapping": False
-        },
-        "notes": "has older data in that isn't of the current GAM year"
-    },'''
-
-
-# In[41]:
+# In[11]:
 
 
 datasets = [
@@ -593,6 +506,11 @@ datasets = [
         """
     },
 ]
+
+
+# In[12]:
+
+
 # Execute comparisons
 for ds in datasets:
     print(f"\n--- Processing {ds['name']} ---")
@@ -628,10 +546,12 @@ for ds in datasets:
                                               how='left').drop(columns=['Week Number', 'WeekNumber_finYear'])
 
     # Ensure 'w/c' columns are datetime in both DataFrames
-    if 'w/c' in orig.columns:
-        orig['w/c'] = pd.to_datetime(orig['w/c'], errors='coerce')
-    if 'w/c' in new.columns:
-        new['w/c'] = pd.to_datetime(new['w/c'], errors='coerce')
+    date_cols = ['w/c', 'week_ending']
+    for col in date_cols:
+        if col in orig.columns:
+            orig[col] = pd.to_datetime(orig[col], errors='coerce')
+        if col in new.columns:
+            new[col] = pd.to_datetime(new[col], errors='coerce')
 
     missing, different = functions.run_comparison(
         orig, new,

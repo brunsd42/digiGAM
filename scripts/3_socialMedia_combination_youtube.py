@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[60]:
+# In[1]:
 
 
 platformID = 'YT-'
@@ -9,7 +9,7 @@ platformID = 'YT-'
 
 # ## import libraries
 
-# In[61]:
+# In[2]:
 
 
 from IPython.display import display
@@ -38,7 +38,7 @@ import psycopg2
 
 # ## import helper 
 
-# In[62]:
+# In[3]:
 
 
 import sys
@@ -54,23 +54,24 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from functions import execute_sql_query
 import test_functions
 
 
-# In[63]:
+# In[4]:
 
 
 gam_info['lookup_file']
 
 
-# In[64]:
+# In[5]:
 
 
 # country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
@@ -95,39 +96,25 @@ socialmedia_accounts.sample()
 
 # # Unique Viewers
 
-# In[65]:
+# In[6]:
 
 
 uniqueViewer_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer.csv")
 uniqueViewer_df.sample()
 
 
-# In[66]:
-
-
-uniqueViewer_df[(uniqueViewer_df['ServiceID'] == 'SER') & 
-                (uniqueViewer_df['w/c'] == '2024-04-01')]
-
-
 # # Country
 
-# In[67]:
+# In[8]:
 
 
 country_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_country_new.csv")
 country_df.sample()
 
 
-# In[68]:
-
-
-temp = country_df.merge(socialmedia_accounts[['Channel ID', 'Service']], on='Channel ID', how='left')
-temp[(temp['PlaceID'] == 'INO')  & (temp['w/c'] == '2024-07-01') & (temp['Service'] == 'Media Action')]
-
-
 # # combine UV & country
 
-# In[69]:
+# In[10]:
 
 
 yt_uv_country = uniqueViewer_df.merge(country_df, 
@@ -144,13 +131,13 @@ test_functions.test_inner_join(uniqueViewer_df, country_df, ['Channel ID', 'w/c'
 print(yt_uv_country._merge.value_counts())
 
 
-# In[70]:
+# In[11]:
 
 
 #yt_uv_country.to_csv('temp_yt_uvCountry.csv', index=None)
 
 
-# In[71]:
+# In[12]:
 
 
 yt_uv_country = yt_uv_country[yt_uv_country['_merge'] == 'both'].drop(columns=['_merge'])
@@ -158,7 +145,7 @@ yt_uv_country['uv_by_country'] = yt_uv_country['country_%'] * yt_uv_country['Uni
 yt_uv_country.sample()
 
 
-# In[72]:
+# In[13]:
 
 
 ################################### Testing ################################### 
@@ -186,14 +173,12 @@ yt_uv_country.sample()
 # - [ ] county the number of weeks we have for every channel counntry combination
 # - [ ] check that no channel name is empty
 
-# In[73]:
+# In[14]:
 
 
 cols = ['w/c', 'PlaceID', 'ServiceID', 'Channel ID', 'uv_by_country', ]
 yt_uv_country[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer_country.csv", 
                      index=None)
-'''yt_uv_country.to_csv(f"../data/singlePlatform/input/YouTube/{gam_info['file_timeinfo']}_metric_country.csv", 
-                     index=None)'''
 
 
 # In[ ]:

@@ -1,3 +1,5 @@
+from IPython.display import display
+
 import pandas as pd 
 import numpy as np
 import psycopg2
@@ -109,6 +111,45 @@ def execute_sql_query(sql_query):
         conn.close()
 
 ################################ single platform calculations
+
+def filter_channels_by_weeks(df, week_col='w/c', channel_col='Channel ID', min_weeks=12):
+    """
+    Filters channels that have at least `min_weeks` of data and reports excluded channels.
+
+    Parameters:
+    ----------
+    df : pd.DataFrame
+        The input DataFrame containing weekly data.
+    week_col : str
+        Column name representing the week (default: 'w/c').
+    channel_col : str
+        Column name representing the channel ID (default: 'Channel ID').
+    min_weeks : int
+        Minimum number of weeks required to keep a channel (default: 12).
+
+    Returns:
+    -------
+    filtered_df : pd.DataFrame
+        DataFrame containing only channels with >= min_weeks.
+    excluded_summary : pd.DataFrame
+        DataFrame listing excluded channels and their week counts.
+    """
+    # Count unique weeks per channel
+    weeks_per_channel = df.groupby(channel_col)[week_col].nunique()
+
+    # Separate valid and excluded channels
+    valid_channels = weeks_per_channel[weeks_per_channel >= min_weeks].index
+    excluded_channels = weeks_per_channel[weeks_per_channel < min_weeks]
+
+    # Create summary DataFrame for excluded channels
+    excluded_summary = excluded_channels.reset_index().rename(columns={week_col: 'weeks_count'})
+    print('Channels that are excluded due to number of weeks they had audiences:')
+    display(excluded_summary)
+    # Filter original DataFrame
+    filtered_df = df[df[channel_col].isin(valid_channels)]
+
+    return filtered_df
+    
 def include_uk_decision(df, lookup):
     temp = df.merge(lookup[['Channel ID', 'Excluding UK']], on=['Channel ID'] , how='left')
     return temp[~((temp['PlaceID']=='UK') & (temp['Excluding UK']=='Yes'))]

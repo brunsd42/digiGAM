@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[8]:
+# In[1]:
 
 
 platformID = 'INS'
 
 
-# In[9]:
+# In[2]:
 
 
 from datetime import datetime
@@ -20,7 +20,7 @@ import psycopg2
 
 # ## import helper 
 
-# In[10]:
+# In[3]:
 
 
 import sys
@@ -36,15 +36,16 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 import test_functions 
 
 
-# In[11]:
+# In[4]:
 
 
 # country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
@@ -56,21 +57,36 @@ socialmedia_accounts = pd.read_excel("../helper/ins_account_lookup.xlsx")
 
 # # ingest 
 
-# In[12]:
+# In[5]:
 
 
-engagements = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_engagements_final.csv")
+engagements = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_engagements_final.csv",)
 engagements.columns
 
 
-# In[13]:
+# In[20]:
 
 
-country = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_geog.csv")
+# can't find this channel 17841402094893665
+engagements['Channel ID'].sort_values().unique()
+
+
+# In[6]:
+
+
+country = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_geog.csv",
+                     keep_default_na=False)
 country.columns
 
 
-# In[14]:
+# In[19]:
+
+
+# can't find this channel 17841402094893665
+country['Channel ID'].sort_values().unique()
+
+
+# In[7]:
 
 
 country_annual_avg = country.groupby(['Channel ID', 'Channel Name', 
@@ -79,7 +95,7 @@ country_annual_avg = country.groupby(['Channel ID', 'Channel Name',
 
 # # combine 
 
-# In[15]:
+# In[8]:
 
 
 combined = engagements.merge(country, on=["Channel ID", "w/c"], how='left', indicator=True)
@@ -107,7 +123,7 @@ cols = ['Channel ID', 'Channel Name', 'IG Handle', 'ig_user_linked_fb_page_id',
 temp = temp[cols]
 
 
-# In[16]:
+# In[9]:
 
 
 cols = ['Channel ID', 'Channel Name', 'IG Handle', 'ig_user_linked_fb_page_id',
@@ -118,7 +134,7 @@ engagement_country = pd.concat([combined_inner, temp])[cols].rename(columns={'IG
 
 
 
-# In[17]:
+# In[10]:
 
 
 to_clean_country = country_codes[['PlaceID', 'YT-_FBE_codes', gam_info['population_column']]].rename(columns={'YT-_FBE_codes': 'ig_metric_breakdown'})
@@ -127,17 +143,25 @@ print(clean_country.shape)
 final_ig_data = clean_country.drop_duplicates(subset=['PlaceID', 'w/c', gam_info['population_column'],
                                                       'Channel ID', 'Channel Name', 'IG Account URL'])
 print(final_ig_data.shape)
+final_ig_data['IG Engaged Users'] = final_ig_data['IG Engaged Users'].fillna(0)
+final_ig_data['country_%'] = final_ig_data['country_%'].fillna(0)
 final_ig_data['uv_by_country'] = final_ig_data['IG Engaged Users'] * final_ig_data['country_%']
 
 
 # # store 
 
-# In[18]:
+# In[11]:
 
 
 cols = ['w/c', 'PlaceID', 'ServiceID', 'Channel ID', 'uv_by_country']
 final_ig_data[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer_country.csv",
                      index=None)
+
+
+# In[13]:
+
+
+final_ig_data[final_ig_data['Channel ID'] == 17841402094893665]
 
 
 # In[ ]:

@@ -26,7 +26,7 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 import functions
 
 
@@ -34,7 +34,8 @@ import functions
 
 
 # Load country mapping
-country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
+country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)[['PlaceID', 'YT-_FBE_codes']]
 # Load country mapping
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 
@@ -103,12 +104,15 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
         indicator=True
     )
 
-    # Missing rows: present in original but not in new
-    missing_from_new = merged[merged['_merge'] == 'left_only']
-
+    
     # Differing rows: same keys but different values
     comparison_cols = [col for col in all_columns if col not in key_columns_new]
-        
+    
+    merged = merged.dropna(subset=[f"{col}_orig" for col in comparison_cols])
+    
+    # Missing rows: present in original but not in new
+    missing_from_new = merged[merged['_merge'] == 'left_only']
+    
     differing_rows = merged[
         (merged['_merge'] == 'both') &
         merged[[f"{col}_orig" for col in comparison_cols]].ne(
@@ -156,11 +160,14 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
         indicator=True
     )
 
+    # Compute differences
+    comparison_cols = [col for col in all_columns if col not in key_columns_new]
+
+    merged = merged.dropna(subset=[f"{col}_orig" for col in comparison_cols])
+
     # Missing rows: present in original but not in new
     missing_from_new = merged[merged['_merge'] == 'left_only']
 
-    # Compute differences
-    comparison_cols = [col for col in all_columns if col not in key_columns_new]
     for col in comparison_cols:
         merged[f"{col}_diff"] = merged[f"{col}_new"] - merged[f"{col}_orig"]
 
@@ -174,7 +181,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[9]:
+# In[7]:
 
 
 # Dataset configuration
@@ -216,48 +223,27 @@ datasets = [
         },
         "comment": """ yeeeah poifect! """
     },
-    {
-        "name": "Facebook Engagement & Country",
-        "original_path": f"../test/alteryx_datasets/mk_FBE_uniqueViewer_country.csv",
-        "new_path": f"../data/processed/FBE/GAM2025_FBE_uniqueViewer_country.csv",
-        "column_mapping": {
-            'Week Commencing': 'w/c', 
-            'PLACEID1': 'PlaceID', 
-            'FB Service Code': 'ServiceID', 
-            'FB Page ID': 'Channel ID',
-            'Engaged Users by Country': 'uv_by_country',
-        },
-        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'Channel ID'],
-        "method": "integer",
-        "preprocess": {
-            "standardize_country": False,
-            "week_mapping": False
-        },
-        "comment": """  
-        163571453661989 & 2024-04-15: is also missing in minnie's raw dataset data\final data\FB_GAM2025_REDSHIFT.xlsx
-        """
-    },
-    {
-        "name": "Facebook ALL Platform",
-        "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook ALL.xlsx",
-        "new_path": f"../data/singlePlatform/FBE/weekly/GAM2025_WEEKLY_FBE_ALLbyCountry.xlsx",
-        "column_mapping": {
-            'w/c': 'w/c', 
-            'Country Code': 'PlaceID', 
-            'Service Code': 'ServiceID', 
-            'Platform': 'PlatformID',
-            'Reach': 'Reach',
-        },
-        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'PlatformID'],
-        "method": "integer",
-        "preprocess": {
-            "standardize_country": False,
-            "week_mapping": True
-        },
-        "comment": """  
-        
-        """
-    },
+#    {
+#        "name": "Facebook Engagement & Country",
+#        "original_path": f"../test/alteryx_datasets/mk_FBE_uniqueViewer_country.csv",
+#        "new_path": f"../data/processed/FBE/GAM2025_FBE_uniqueViewer_country.csv",
+#        "column_mapping": {
+#            'Week Commencing': 'w/c', 
+#            'PLACEID1': 'PlaceID', 
+#           'FB Service Code': 'ServiceID', 
+#            'FB Page ID': 'Channel ID',
+#            'Engaged Users by Country': 'uv_by_country',
+#        },
+#        "key_columns": ['w/c', 'PlaceID', 'ServiceID', 'Channel ID'],
+#        "method": "integer",
+#        "preprocess": {
+#            "standardize_country": False,
+#            "week_mapping": False
+#        },
+#        "comment": """  
+#        163571453661989 & 2024-04-15: is also missing in minnie's raw dataset data\final data\FB_GAM2025_REDSHIFT.xlsx
+#        """
+#    },
     {
         "name": "Facebook ALL Platform",
         "original_path": f"../../../../Research Projects/GAM/Digital GAM/2025/Social Media/Output/Weekly/WEEKLY Facebook ALL.xlsx",
@@ -576,7 +562,7 @@ datasets = [
 ]
 
 
-# In[10]:
+# In[8]:
 
 
 # Execute comparisons
@@ -653,6 +639,18 @@ for ds in datasets:
             display(different)
     else:
         display(different)
+
+
+# In[9]:
+
+
+different['PlaceID'].unique()
+
+
+# In[13]:
+
+
+different[different['Reach_diff'] < -1]
 
 
 # In[ ]:

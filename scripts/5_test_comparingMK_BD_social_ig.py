@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[44]:
+# In[1]:
 
 
 platformID = 'INS'
 
 
-# In[45]:
+# In[2]:
 
 
 import pandas as pd
@@ -16,7 +16,7 @@ import numpy as np
 from IPython.display import display
 
 
-# In[46]:
+# In[3]:
 
 
 import sys
@@ -32,15 +32,16 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 import functions
 
 
-# In[47]:
+# In[4]:
 
 
 # Load country mapping
-country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')[['PlaceID', 'YT-_FBE_codes']]
+country_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)[['PlaceID', 'YT-_FBE_codes']]
 # Load country mapping
 week_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[['w/c', 'WeekNumber_finYear']]
 # social media accounts
@@ -57,7 +58,7 @@ channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
 
 
-# In[48]:
+# In[5]:
 
 
 # Utility functions
@@ -79,7 +80,7 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
         raise ValueError("Unknown comparison method")
 
 
-# In[49]:
+# In[6]:
 
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
@@ -143,7 +144,7 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     return missing_from_new, differing_rows
 
 
-# In[50]:
+# In[7]:
 
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, threshold=0.0001):
@@ -198,7 +199,7 @@ def compare_dataframes_percentage(original_df, new_df, column_mapping, key_colum
     return missing_from_new, differing_rows
 
 
-# In[51]:
+# In[8]:
 
 
 # Dataset configuration
@@ -631,9 +632,33 @@ datasets = [
 ]
 
 
-# In[55]:
+# In[9]:
 
 
+datasets = [
+    {
+        "name": "Instagram combined",
+        "original_path": "../data/interim/preBU_INS.csv",
+        "new_path": f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer_country.csv",
+        "column_mapping": {
+            'IG Account ID': 'Channel ID',
+            'Week Commencing': 'w/c',
+            'PLACEID1': 'PlaceID',
+            'IG Reach by country': 'uv_by_country'
+        },
+        "key_columns": ['Channel ID', 'PlaceID', 'w/c'],
+        "method": "integer",
+        "preprocess": {
+            "standardize_country": False,
+            "week_mapping": False
+        },
+        "comment": '''
+                        can't explain discrepancy but I am pretty sure it is more likely to be an issue
+                        in minnie's dataset. I stored csv's of the outputs and these are identical, 
+                        however trying to use these as inputs in instagram_domi.yxmd failed. 
+        '''
+    },
+]
 # Execute comparisons
 for ds in datasets:
     # TODO - test currently doesn't catch additional things in my dataset that are not in minnie's 
@@ -648,8 +673,8 @@ for ds in datasets:
         orig = load_csv(ds["original_path"])
         
     new  = load_excel(ds["new_path"]) if ds["new_path"].endswith(".xlsx") else load_csv(ds["new_path"])
+    #print(orig.columns)
     
-    print(orig.columns)
     # Special preprocessing for Country Percentage dataset
     if ds["name"] == "Country Percentage":
         # Rename 'Country' to 'YouTube Codes' in original data and merge with mapping
@@ -704,6 +729,12 @@ for ds in datasets:
             display(different.sort_values(by=[col for col in different.columns if col.endswith('_diff')][0], ascending=False))
         else:
             display(different)
+
+
+# In[14]:
+
+
+orig[orig['Channel ID'] == '17841402094893665']
 
 
 # In[ ]:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[29]:
+# In[1]:
 
 
 platformID = 'TWI'
@@ -13,7 +13,7 @@ platformID = 'TWI'
 # 
 # twitter business unit and aggregated services is currently calculated by using minnie's dataset (helper/tw_minnie_preBU.csv)
 
-# In[30]:
+# In[2]:
 
 
 from datetime import datetime
@@ -24,7 +24,7 @@ import psycopg2
 
 # ## import helper
 
-# In[31]:
+# In[3]:
 
 
 import sys
@@ -40,21 +40,22 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from config_GAM2025 import gam_info
+from config import gam_info
 
 from functions import execute_sql_query
 import test_functions
 
 
-# In[32]:
+# In[4]:
 
 
 # country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
+                              keep_default_na=False)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
-week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
+#week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 week_tester['week_ending'] = pd.to_datetime(week_tester['week_ending'])
 
 # social media accounts
@@ -75,7 +76,7 @@ formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_id
 
 # # temporary fix
 
-# In[33]:
+# In[5]:
 
 
 '''cols_rename = {'Week Number': 'WeekNumber_finYear', 
@@ -98,26 +99,22 @@ full_df.to_csv(f"../data/processed/{platformID}/minnie_uniqueViewer_country.csv"
 
 # # ingestion
 
-# In[34]:
+# In[9]:
 
 
-tw_activity_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv")
-tw_activity_df['week_ending'] = pd.to_datetime(tw_activity_df['week_ending'])
-tw_activity_df.columns
+tw_activity_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv",
+                             keep_default_na=False)
 
 
-# In[35]:
+# In[10]:
 
-
-tw_activity_df = tw_activity_df.merge(week_tester[['week_ending', 'WeekNumber_finYear', 'w/c']], 
-                                      on=['week_ending'], how='left')
 
 tw_activity_df['tw_account_id'] = tw_activity_df['tw_account_id'].apply(lambda x: str(int(x)))
+tw_activity_df = tw_activity_df.rename(columns={'week_commencing': 'w/c'})
+tw_activity_df.sample()
 
-tw_activity_df.head()
 
-
-# In[36]:
+# In[11]:
 
 
 tw_country_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country.csv",
@@ -140,17 +137,9 @@ tw_country_df['TW Linked FB account'] = tw_country_df['TW Linked FB account'].ap
 tw_country_df.sample()
 
 
-# In[37]:
-
-
-tw_country_df[(tw_country_df['tw_account_id'] == 146478129) &
-            #(tw_country_df['Country'] == 'Argentina') &
-            (tw_country_df['WeekNumber_finYear'] == 1)]
-
-
 # # combine 
 
-# In[38]:
+# In[12]:
 
 
 tw_activity_country = tw_activity_df.merge(tw_country_df, on=['tw_account_id', 'WeekNumber_finYear'], 
@@ -160,7 +149,7 @@ test_functions.test_inner_join(tw_activity_df, tw_country_df, ['tw_account_id', 
                                '1_TW_10', test_step='joining activity & country - first')
 
 
-# In[39]:
+# In[13]:
 
 
 left_over = tw_activity_country[tw_activity_country._merge == 'left_only'].drop(columns='_merge')
@@ -181,7 +170,7 @@ test_functions.test_inner_join(left_over, grouped_df, ['tw_account_id'],
                                '1_TW_11', test_step='joining activity & country - second')
 
 
-# In[40]:
+# In[14]:
 
 
 cols = ['tw_account_id', 'TW Account Name', 'TW Account Handle',
@@ -202,7 +191,7 @@ final_df = final_df.rename(columns={'TW Service Code': 'ServiceID', }).drop_dupl
 final_df.to_csv(f"../data/processed/{platformID}/temp_{gam_info['file_timeinfo']}_metric_country.csv", index=None)
 
 
-# In[41]:
+# In[15]:
 
 
 # handle if country == 'other'
@@ -218,7 +207,7 @@ rescaled_df['engagement_%'] = rescaled_df["Engagement %_"]/rescaled_df["Engageme
 
 # ## facebook factor 
 
-# In[42]:
+# In[16]:
 
 
 fb_factor = pd.read_excel("../helper/FB Factor for IG and TW.xlsx").drop_duplicates()
@@ -270,7 +259,7 @@ twitter_df = pd.concat([done, fixed])
 print(f"4: {twitter_df.shape}")
 
 
-# In[43]:
+# In[17]:
 
 
 twitter_df['Weekly Video Views'] = twitter_df['Weekly Video Views'].fillna(0)
@@ -283,7 +272,7 @@ twitter_df['Twitter Engaged Users'] = np.where(twitter_df['temp']>twitter_df['30
 twitter_df['uv_by_country'] = twitter_df["Twitter Engaged Users"]*twitter_df["engagement_%"]
 
 
-# In[44]:
+# In[18]:
 
 
 twitter_df['Country'] = twitter_df['Country'].fillna('Unknown')
@@ -292,13 +281,13 @@ twitter_df_clean = twitter_df_clean.merge(country_codes[['TWI_CountryName', 'Pla
                                                                                on='TWI_CountryName', how='left', indicator=True)
 
 
-# In[45]:
+# In[19]:
 
 
 print(twitter_df_clean._merge.value_counts())
 
 
-# In[46]:
+# In[20]:
 
 
 twitter_df_clean = twitter_df_clean.rename(columns={
