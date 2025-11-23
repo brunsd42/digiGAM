@@ -38,9 +38,9 @@ def test_filter_elements_returned(df, filter_elements, column_name, test_number,
     
     # Print the results
     if not issues_df.empty:
-        print(f"Test {test_number} failed: not all elements were retrieved")
+        print(f"❌ Test {test_number} failed: not all elements were retrieved")
     else:
-        print(f"Test {test_number} passed: everything found!")
+        print(f"✅ Test {test_number} passed: everything found!")
     
     update_logbook(test_number=test_number, issues_list= issues_df, 
                    test_step=test_step, test='testing missing elements in columns')
@@ -84,10 +84,10 @@ def test_weeks_presence_per_account(key, id_column, main_data, week_lookup, test
 
     # Convert to DataFrame for logging
     if missing_pairs.empty:
-        print(f"Test {test_number} passed: All completed weeks present for each account.")
+        print(f"✅ Test {test_number} passed: All completed weeks present for each account.")
         missing_df = pd.DataFrame()
     else:
-        print(f"Test {test_number} failed: Missing completed weeks detected.")
+        print(f"❌ Test {test_number} failed: Missing completed weeks detected.")
         missing_df = pd.DataFrame(missing_pairs.to_frame(index=False))
 
     # Log results
@@ -111,7 +111,7 @@ def test_inner_join(df_left, df_right, key, test_number, test_step='', focus='bo
     
     # Check if there are any issues with the join
     if issue_df_left.empty and issue_df_right.empty:
-        print(f"Inner join test {test_number} successful: No issues found.")
+        print(f"✅ Inner join test {test_number} successful: No issues found.")
     else:
         
         print(f"Inner join test {test_number} failed: Issues found.")
@@ -149,10 +149,10 @@ def test_duplicates(df, columns, test_number, test_step=''):
     
     # Print the results
     if not issues_df.empty:
-        print(f"Test {test_number} failed: The following combinations occur more than once a week")
+        print(f"❌ Test {test_number} failed: The following combinations occur more than once a week")
         
     else:
-        print(f"Test {test_number} passed: No combinations occurs more than once a week.")
+        print(f"✅ Test {test_number} passed: No combinations occurs more than once a week.")
     update_logbook(test_number, issues_df, 'testing the combination of columns for uniqueness', test_step)
 
 def test_non_null_and_positive(df, numeric_columns=None, test_number='', test_step=''):
@@ -175,24 +175,70 @@ def test_non_null_and_positive(df, numeric_columns=None, test_number='', test_st
 
     nan_issues = df[df[numeric_columns].isnull().any(axis=1)]
     if not nan_issues.empty:
-        print(f"Test {test_number} failed: NaN values detected in numeric columns.")
+        print(f"❌ Test {test_number} failed: NaN values detected in numeric columns.")
         issues_df = pd.concat([issues_df, nan_issues])
 
     # Check for non-positive values
     for col in numeric_columns:
-        non_positive = df[df[col] <= 0]
+        non_positive = df[df[col] < 0]
         if not non_positive.empty:
-            print(f"Test {test_number} failed: Non-positive values detected in column '{col}'.")
+            print(f"❌ Test {test_number} failed: Non-positive values detected in column '{col}'.")
             issues_df = pd.concat([issues_df, non_positive])
 
     if issues_df.empty:
-        print(f"Test {test_number} passed: No NaN and all numeric values > 0.")
+        print(f"✅ Test {test_number} passed: No NaN and all numeric values > 0.")
     else:
         issues_df = issues_df.drop_duplicates()
 
     # Log results
     update_logbook(test_number, issues_df, test='Check for NaN and positive values', test_step=test_step)
+
+
+def test_empty(df, test_number, test_step='', name='lookup'):
+    """
+    Test if a DataFrame is empty.
+    Logs the result and updates the logbook.
+    """
+    issues_df = pd.DataFrame()
+
+    if df.empty:
+        print(f"❌ Test {test_number} failed: {name} DataFrame is empty.")
+        issues_df = pd.DataFrame({'Issue': [f"{name} DataFrame is empty"]})
+    else:
+        print(f"✅ Test {test_number} passed: {name} DataFrame is not empty.")
+
+    update_logbook(test_number, issues_df, test=f"Testing if {name} DataFrame is empty", test_step=test_step)
+
+def test_missing(df, columns, test_number, test_step='', name='lookup'):
+    """
+    Test if there are missing values in specified columns of a DataFrame.
+    Logs the result and updates the logbook.
+    """
+    # Count missing values in the specified columns
+    missing_counts = df[columns].isnull().sum()
+    issues_df = pd.DataFrame()
+
+    if missing_counts.any():
+        print(f"❌ Test {test_number} failed: Missing values detected in {name}.")
+        # Prepare details for logbook
+        missing_detail = {col: int(count) for col, count in missing_counts.items() if count > 0}
+        issues_df = pd.DataFrame({'Issue': [f"Missing values: {missing_detail}"]})
+    else:
+        print(f"✅ Test {test_number} passed: No missing values in {name}.")
+
+    update_logbook(test_number, issues_df, test=f"Testing missing values in {name}", test_step=test_step)
     
+def test_lookup_files(df, id_columns, test_numbers, test_step):
+    
+    # returns entries
+    test_empty(df, test_numbers[0], test_step=test_step, name='lookup')
+    
+    # unique keys 
+    test_duplicates(df, id_columns, test_numbers[1], test_step=test_step)
+    
+    # missing values
+    test_missing(df, id_columns, test_numbers[2], test_step=test_step, name='lookup')
+
 #############################################################################################################
 # test same values
 def test_allowed_values(df, test_column, allowed_values, test_number, test_step=''):
@@ -201,10 +247,10 @@ def test_allowed_values(df, test_column, allowed_values, test_number, test_step=
     
     # Print the results
     if not issues_df.empty:
-        print("Fail - found not allowed values")
+        print("❌ Fail - found not allowed values")
         
     else:
-        print("Pass - found only allowed values")
+        print("✅ Pass - found only allowed values")
     update_logbook(test_number, issues_df, 'testing no other values than specific occur in col', test_step)
 
 
@@ -288,17 +334,17 @@ def test_hierarchy_reach(test_number, mode, gam_info, df, key, metric_col, test_
                    'testing platform hierarchy reach', test_step)
     
     if not issues_df.empty:
-        print("Test failed. Issues found and saved to '../test/issues/'.")
+        print("❌ Test failed. Issues found and saved to '../test/issues/'.")
         return issues_df
     
-    print("All tests passed.")
+    print("✅ All tests passed.")
     return issues_df
 
 def test_adding_WWW(start, test_val, end, test_number, test_step='', ):
     
     result = end == start-test_val+2*test_val
     if result == True: 
-        print("passed the test! ")
+        print("✅ passed the test! ")
         df = pd.DataFrame()
     else: 
         df = pd.DataFrame({'result': ['fail']})
@@ -310,7 +356,7 @@ def test_adding_wseWWW_enw(start, test_val, end, test_number, test_step='', ):
     
     result = end == start-test_val+4*test_val
     if result == True: 
-        print("passed the test! ")
+        print("✅ passed the test! ")
         df = pd.DataFrame()
     else: 
         df = pd.DataFrame({'result': ['fail']})
@@ -346,10 +392,10 @@ def test_larger_val(df, column, test_number, test_step='', val=1):
     
     # Print the results
     if not issues_df.empty:
-        print("Fail - found larger than 1 values")
+        print("❌ Fail - found larger than 1 values")
         
     else:
-        print("Pass - No larger than 1 values")
+        print("✅ Pass - No larger than 1 values")
     update_logbook(test_number, issues_df, 'testing the combination of columns for too large values', test_step)
     
 def test_missing_hierarchy_levels(gam_info, df, test_number):
@@ -365,20 +411,20 @@ def test_missing_hierarchy_levels(gam_info, df, test_number):
     update_logbook(test_number, issues_df, 'testing missing levels in hierarchy')
     
     if not issues_df.empty:
-        print(f"Test failed. Issues found and saved to '../test/{test_number}_issue_list.csv'.")
+        print(f"❌ Test failed. Issues found and saved to '../test/{test_number}_issue_list.csv'.")
         return issues_df
     
-    print("All tests passed.")
+    print("✅ All tests passed.")
     return issues_df
 
 def test_merge_row_count(original_df, merged_df, test_number, test_step):
     print('...testing if merge leads to more rows on the metric side')
     # Check if the number of rows in the merged DataFrame is less than or equal to the number of rows in the original DataFrame
     if len(merged_df) == len(original_df):
-        print('pass! :)')
+        print('✅ pass! :)')
         issue_list = pd.DataFrame()
     else:
-        print('fail :( ')
+        print('❌ fail :( ')
         common_columns = original_df.columns.intersection(merged_df.columns).tolist()
         issue_list = merged_df[merged_df.duplicated(subset=common_columns, keep=False)]
     
@@ -393,10 +439,10 @@ def test_negative_values(df, column, test_number, test_step=''):
     
     # Print the results
     if not issues_df.empty:
-        print("Fail - found negative values")
+        print("❌ Fail - found negative values")
         
     else:
-        print("Pass - No negative values")
+        print("✅ Pass - No negative values")
     update_logbook(test_number, issues_df, 'testing the combination of columns for negative', test_step)
 
 
@@ -409,10 +455,10 @@ def test_same_values(df1, df2, key, test_col, test_number, test_step=''):
     
     # Print the results
     if not issues_df.empty:
-        print("Fail - found some values")
+        print("❌ Fail - found some values")
         
     else:
-        print("Pass - No larger than 1 values")
+        print("✅ Pass - No larger than 1 values")
     update_logbook(test_number, issues_df, 'testing that the summing between different steps is correct', test_step)
 
 
@@ -444,12 +490,91 @@ def test_weeks_presence(key, main_data, week_lookup, test_number, test_step=''):
     missing_weeks = week_lookup_test_data[~week_lookup_test_data[key].isin(merged_data[key])]
 
     if missing_weeks.empty:
-        print("All weeks are present in the dataset.")
+        print("✅ All weeks are present in the dataset.")
     else:
-        print("Missing weeks:")
+        print("❌ Missing weeks:")
         print(missing_weeks)
     update_logbook(test_number, missing_weeks, 'all weeks in dataset', test_step)
 
+def test_outliers_general(df, numeric_columns, test_number, test_step='', threshold=3):
+    """
+    Detect outliers in numeric columns using Z-score and log mean + allowed range.
+    """
+    issues_list = []
+    for col in numeric_columns:
+        if df[col].dtype.kind in 'biufc':  # numeric check
+            mean, std = df[col].mean(), df[col].std()
+            lower, upper = mean - threshold * std, mean + threshold * std
+            outliers = df[(df[col] < lower) | (df[col] > upper)]
+            if not outliers.empty:
+                for _, row in outliers.iterrows():
+                    issues_list.append({
+                        'Week': row['w/c'],
+                        'Channel ID': row['Channel ID'],
+                        'Column': col,
+                        'Value': row[col],
+                        'Mean': int(round(mean)),
+                        'Allowed Range': f"[{lower:.2f}, {upper:.2f}]"
+                    })
+    issues_df = pd.DataFrame(issues_list)
+    print(f"Test {test_number} {'❌ failed' if not issues_df.empty else '✅ passed'}: Outlier check.")
+    update_logbook(test_number, issues_df, test='General outlier detection', test_step=test_step)
+
+
+def test_outliers_vs_reference(df, reference_df, key_columns, numeric_columns, test_number, test_step='', tolerance=3):
+    """
+    Detect outliers where actual value exceeds reference * (1 + tolerance).
+    Only checks upper boundary and ignores reference points below 100k
+    """
+    
+    merged = df.merge(reference_df, on=key_columns, suffixes=('', '_ref'))
+    issues_list = []
+    for col in numeric_columns:
+        temp=merged[merged[f'{col}_ref'] > 100000]
+        allowed_upper_col = f"{col}_allowed_upper"
+        temp[allowed_upper_col] = temp[f"{col}_ref"] * (1 + tolerance)
+        outliers = temp[temp[col] > temp[allowed_upper_col]]  # Upper-bound only
+        if not outliers.empty:
+            for _, row in outliers.iterrows():
+                issues_list.append({
+                    'Week': row['w/c'],
+                    'Channel ID': row['Channel ID'],
+                    'Column': col,
+                    'Value': row[col],
+                    'Reference': int(round(row[f"{col}_ref"])),
+                    'Allowed Range': f"[0, {int(round(row[allowed_upper_col]))}]",
+                    'Exceeded By': int(row[col] - row[allowed_upper_col])
+                })
+    issues_df = pd.DataFrame(issues_list)
+    print(f"Test {test_number} {'❌ failed' if not issues_df.empty else '✅ passed'}: Upper-bound outlier check.")
+    update_logbook(test_number, issues_df, test='Upper-bound outlier detection vs reference', test_step=test_step)
+
+'''def test_outliers_vs_reference(df, reference_df, key_columns, numeric_columns, test_number, test_step='', tolerance=0.5):
+    """
+    Detect deviations compared to reference data and log mean + allowed range.
+    """
+    merged = df.merge(reference_df, on=key_columns, suffixes=('', '_ref'))
+    issues_list = []
+    for col in numeric_columns:
+        merged['diff_ratio'] = (merged[col] - merged[f"{col}_ref"]).abs() / merged[f"{col}_ref"].replace(0, 1)
+        outliers = merged[merged['diff_ratio'] > tolerance]
+        if not outliers.empty:
+            for _, row in outliers.iterrows():
+                #allowed_lower = row[f"{col}_ref"] * (1 - tolerance)
+                allowed_lower = 0
+                allowed_upper = row[f"{col}_ref"] * (1 + tolerance)
+                issues_list.append({
+                    'Week': row['w/c'],
+                    'Channel ID': row['Channel ID'],
+                    'Column': col,
+                    'Value': row[col],
+                    'Reference': row[f"{col}_ref"],
+                    'Allowed Range': f"[{allowed_lower:.2f}, {allowed_upper:.2f}]"
+                })
+    issues_df = pd.DataFrame(issues_list)
+    print(f"Test {test_number} {'❌ failed' if not issues_df.empty else '✅ passed'}: Outlier vs reference check.")
+    update_logbook(test_number, issues_df, test='Outlier detection vs reference', test_step=test_step)
+    '''
     
 def update_logbook(test_number, issues_list, test='', test_step=''):
     """
@@ -628,9 +753,9 @@ def test_engagement_logic(df):
             print(f"Row {index}: FLAG - logic fails here!")
             test_fail = True
     if test_fail:
-        print('test failed!')
+        print('❌ test failed!')
     else:
-        print('test passed!')
+        print('✅ test passed!')
 
 def youtube_test_input_files(test_number, folder_paths, main_path, week_tester, test_step=''):
     """
@@ -677,9 +802,9 @@ def youtube_test_input_files(test_number, folder_paths, main_path, week_tester, 
         missing_weeks = week_tester_str - weeks_found_str
 
         if not missing_weeks:
-            print("All weeks are present in the dataset.")
+            print("✅ All weeks are present in the dataset.")
         else:
-            print("Missing weeks:")
+            print("❌ Missing weeks:")
             print(missing_weeks)
             formatted_missing_weeks = [pd.to_datetime(week).strftime('%d-%m-%Y') for week in missing_weeks]
             issues_list.append({'issue': 'missing_weeks', 
@@ -698,9 +823,9 @@ def site_test_unique_entries(df, column_name, test_number, test_step=''):
     
     duplicates = pd.DataFrame(columns=[column_name])
     if len(unique_values) == total_values:
-        print(f"Pass - All numbers in the column '{column_name}' are unique.")
+        print(f"✅ Pass - All numbers in the column '{column_name}' are unique.")
     else:
-        print(f"Fail - There are duplicate numbers in the column '{column_name}'.")
+        print(f"❌ Fail - There are duplicate numbers in the column '{column_name}'.")
         duplicates = df[column_name][df[column_name].duplicated()]
         print("Duplicate values:")
         print(duplicates)
@@ -719,10 +844,10 @@ def podcast_test_services_in_results(sql_results, podcast_details, test_number, 
     missing_services = expected_services - actual_services
     
     if not missing_services:
-        print("Pass - All services are listed in the SQL results.")
+        print("✅ Pass - All services are listed in the SQL results.")
         issue_df = pd.DataFrame()
     else:
-        print("Fail - The following services are missing from the SQL results:")
+        print("❌ Fail - The following services are missing from the SQL results:")
         issue_df = pd.DataFrame(list(missing_services), columns=['Missing Services'])
         for service in missing_services:
             print(f"- {service}")
@@ -733,9 +858,9 @@ def podcast_check_unknown_services(sql_results, test_number, test_step=''):
     unknown_services = sql_results[sql_results['service'] == 'Unknown']
     
     if unknown_services.empty:
-        print("Pass - No 'Unknown' services found in the SQL results.")
+        print("✅ Pass - No 'Unknown' services found in the SQL results.")
     else:
-        print(f"Fail - Found {len(unknown_services)} 'Unknown' services in the SQL results.")
+        print(f"❌ Fail - Found {len(unknown_services)} 'Unknown' services in the SQL results.")
         print(unknown_services)
 
     update_logbook(test_number, unknown_services, test='podcast_check_unknown_services', test_step='')
