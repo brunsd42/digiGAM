@@ -15,6 +15,7 @@ import urllib.parse
 import security_config
 
 
+
     
 ################### PIANO
 def convert_url_to_query(url, start, end):
@@ -593,6 +594,42 @@ def calculate_aggregated_services(data, stages, platform, gam_info, path,
 
 
 ########################### COMPARING 
+
+
+def compare_or_update_reference(df, reference_path, cols, update=False):
+    """
+    Compare DataFrame to a reference file (Pickle for accuracy).
+    If update=True, overwrite the reference file with the new DataFrame.
+    
+    Parameters:
+    - df: DataFrame to validate
+    - reference_path: Path to reference Pickle file
+    - cols: List of columns to compare
+    - update: If True, update the reference file with df
+    """
+    # Select relevant columns
+    df = df[cols].copy()
+
+    # Normalize: sort rows and columns
+    df = df.sort_values(by=cols).reset_index(drop=True)
+
+    if update or not pd.io.common.file_exists(reference_path):
+        df.to_pickle(reference_path)
+        print(f"✅ Reference file updated at {reference_path}")
+        return
+
+    # Load reference
+    ref_df = pd.read_pickle(reference_path)
+    ref_df = ref_df.sort_values(by=cols).reset_index(drop=True)
+
+    # Compare
+    if df.equals(ref_df):
+        print("✅ Output matches reference.")
+    else:
+        print("❌ Output differs from reference!")
+        # Show sample differences
+        print(df.compare(ref_df).head(10))
+        
 # Utility functions
 def load_excel(path, sheet_name=None):
     if sheet_name != None: 

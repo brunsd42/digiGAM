@@ -24,7 +24,8 @@ def convert_notebooks(list_file_path):
 
         # Move the generated .py file to ../scripts/
         generated_py = notebook.with_suffix('.py')
-        target_py = output_dir / generated_py.name
+        script_name = generated_py.stem + "_fromNotebook.py"
+        target_py = output_dir / script_name
 
         if generated_py.exists():
             generated_py.rename(target_py)

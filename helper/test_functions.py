@@ -4,6 +4,7 @@ from datetime import datetime
 from tqdm import tqdm
 import re
 from openpyxl import load_workbook
+from openpyxl import Workbook
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -12,6 +13,187 @@ import warnings
 
 from sklearn.preprocessing import MinMaxScaler
 
+########
+import sys
+from pathlib import Path
+
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
+sys.path.insert(0, str(helper_path))
+
+from config import gam_info
+#########
+
+# Test to check if all filter elements were returned
+def test_filter_elements_returned(df, filter_elements, column_name, test_number, test_step=''):
+    print(f"...testing {column_name}...")
+    returned_elements = df[column_name].unique().tolist()
+    missing_elements = set(filter_elements) - set(returned_elements)
+    issues_df = pd.DataFrame(list(missing_elements), columns=[column_name])
+    
+    # Print the results
+    if not issues_df.empty:
+        print(f"Test {test_number} failed: not all elements were retrieved")
+    else:
+        print(f"Test {test_number} passed: everything found!")
+    
+    update_logbook(test_number=test_number, issues_list= issues_df, 
+                   test_step=test_step, test='testing missing elements in columns')
+    
+
+def test_weeks_presence_per_account(key, id_column, main_data, week_lookup, test_number, test_step=''):
+    """
+    Check if all completed weeks from the week lookup are present for each account in the main dataset.
+
+    Parameters:
+    key (str): Column name for the week information.
+    id_column (str): Column name for the account ID.
+    main_data (pd.DataFrame): Main dataset containing account-week data.
+    week_lookup (pd.DataFrame): DataFrame containing expected weeks.
+    test_number (str): Unique test identifier.
+    test_step (str): Optional description of the test step.
+
+    Returns:
+    pd.DataFrame: Missing account-week combinations if any.
+    """
+    # Ensure datetime consistency
+    main_data[key] = pd.to_datetime(main_data[key])
+    week_lookup[key] = pd.to_datetime(week_lookup[key])
+
+    # Filter weeks to only include those fully completed (Monday last week or earlier)
+    today = pd.Timestamp.today().normalize()
+    last_monday = today - pd.Timedelta(days=today.weekday() + 7)  # Monday of last week
+    completed_weeks = week_lookup[week_lookup[key] <= last_monday]
+
+    # Create expected combinations using cartesian product
+    expected_pairs = pd.MultiIndex.from_product(
+        [main_data[id_column].unique(), completed_weeks[key].unique()],
+        names=[id_column, key]
+    )
+
+    # Actual combinations from main data
+    actual_pairs = pd.MultiIndex.from_frame(main_data[[id_column, key]])
+
+    # Find missing pairs
+    missing_pairs = expected_pairs.difference(actual_pairs)
+
+    # Convert to DataFrame for logging
+    if missing_pairs.empty:
+        print(f"Test {test_number} passed: All completed weeks present for each account.")
+        missing_df = pd.DataFrame()
+    else:
+        print(f"Test {test_number} failed: Missing completed weeks detected.")
+        missing_df = pd.DataFrame(missing_pairs.to_frame(index=False))
+
+    # Log results
+    update_logbook(test_number, missing_df, test='Weeks presence per account', test_step=test_step)
+
+def test_inner_join(df_left, df_right, key, test_number, test_step='', focus='both'):
+    resulting_df = df_left[key].merge(df_right[key], on=key, how='outer', indicator=True, 
+                                      suffixes=('_left', '_right'))
+    
+    # Initialize issue dataframes
+    issue_df_left = pd.DataFrame()
+    issue_df_right = pd.DataFrame()
+    
+    # Test to ensure no data is lost from df_left
+    if (resulting_df[resulting_df['_merge'] == 'left_only'].shape[0] > 0) & (focus !='right'):
+        issue_df_left = resulting_df[resulting_df['_merge'] == 'left_only']
+    
+    # Test to ensure no data is lost from df_right
+    if (resulting_df[resulting_df['_merge'] == 'right_only'].shape[0] > 0) & (focus !='left'):
+        issue_df_right = resulting_df[resulting_df['_merge'] == 'right_only']
+    
+    # Check if there are any issues with the join
+    if issue_df_left.empty and issue_df_right.empty:
+        print(f"Inner join test {test_number} successful: No issues found.")
+    else:
+        
+        print(f"Inner join test {test_number} failed: Issues found.")
+        if not issue_df_left.empty:
+            issue_df_left = issue_df_left.drop_duplicates()
+            
+            print(f"Issues with df_left (rows present in df_left but not in df_right)")
+            
+        if not issue_df_right.empty:
+            issue_df_right = issue_df_right.drop_duplicates()
+            
+            print(f"Issues with df_right (rows present in df_right but not in df_left)")
+            
+    update_logbook(test_number, pd.concat([issue_df_left, issue_df_right]), 
+                   test='testing inner join - dataloss between two tables', test_step=test_step)
+
+# Test to check if the country percentage adds up to a 100% #former test_country_percentage
+def test_percentage(df, groupby_columns, test_number, test_step, percentage_col='country_%'):
+
+    test_df = df.copy()
+    
+    # Group by fb_page_name and fb_metric_end_time, and sum country_%
+    test_df[percentage_col] = test_df[percentage_col] * 100
+    test_df = test_df.groupby(groupby_columns)[percentage_col].sum().reset_index()
+    test_df[percentage_col] = test_df[percentage_col].round(0)
+    issues_df = test_df[test_df[percentage_col] != 100.0]
+
+    update_logbook(test_number, issues_df, 'testing country percentage', test_step)
+
+# test for duplicate entries 
+def test_duplicates(df, columns, test_number, test_step=''):
+    # Check if any country/channel occurs more than once a week
+    issues_df = df.groupby(columns).size().reset_index(name='Count')
+    issues_df = issues_df[issues_df['Count'] > 1]
+    
+    # Print the results
+    if not issues_df.empty:
+        print(f"Test {test_number} failed: The following combinations occur more than once a week")
+        
+    else:
+        print(f"Test {test_number} passed: No combinations occurs more than once a week.")
+    update_logbook(test_number, issues_df, 'testing the combination of columns for uniqueness', test_step)
+
+def test_non_null_and_positive(df, numeric_columns=None, test_number='', test_step=''):
+    """
+    Test that the numeric columns of the dataframe have no NaN values and contain values > 0.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame to check.
+        numeric_columns (list): List of numeric columns to check for > 0. If None, checks all numeric columns.
+        test_number (str): Unique test identifier.
+        test_step (str): Optional description of the test step.
+
+    """
+    issues_df = pd.DataFrame()
+
+    # Check for NaN values in numeric columns
+    if numeric_columns is None:
+        numeric_columns = df.select_dtypes(include='number').columns.tolist()
+        print('numeric columns was not indicated - applying test to all numeric columns')
+
+    nan_issues = df[df[numeric_columns].isnull().any(axis=1)]
+    if not nan_issues.empty:
+        print(f"Test {test_number} failed: NaN values detected in numeric columns.")
+        issues_df = pd.concat([issues_df, nan_issues])
+
+    # Check for non-positive values
+    for col in numeric_columns:
+        non_positive = df[df[col] <= 0]
+        if not non_positive.empty:
+            print(f"Test {test_number} failed: Non-positive values detected in column '{col}'.")
+            issues_df = pd.concat([issues_df, non_positive])
+
+    if issues_df.empty:
+        print(f"Test {test_number} passed: No NaN and all numeric values > 0.")
+    else:
+        issues_df = issues_df.drop_duplicates()
+
+    # Log results
+    update_logbook(test_number, issues_df, test='Check for NaN and positive values', test_step=test_step)
+    
+#############################################################################################################
 # test same values
 def test_allowed_values(df, test_column, allowed_values, test_number, test_step=''):
     # Check if any country/channel occurs more than once a week
@@ -25,37 +207,6 @@ def test_allowed_values(df, test_column, allowed_values, test_number, test_step=
         print("Pass - found only allowed values")
     update_logbook(test_number, issues_df, 'testing no other values than specific occur in col', test_step)
 
-# test for duplicate entries 
-def test_duplicates(df, columns, test_number, test_step=''):
-    # Check if any country/channel occurs more than once a week
-    issues_df = df.groupby(columns).size().reset_index(name='Count')
-    issues_df = issues_df[issues_df['Count'] > 1]
-    
-    # Print the results
-    if not issues_df.empty:
-        print("Fail - The following combinations occur more than once a week:")
-        
-    else:
-        print("Pass - No combinations occurs more than once a week.")
-    update_logbook(test_number, issues_df, 'testing the combination of columns for uniqueness', test_step)
-
-
-# Test to check if all filter elements were returned
-def test_filter_elements_returned(df, filter_elements, column_name, test_number, test_step=''):
-    print(f"...testing {column_name}...")
-    returned_elements = df[column_name].unique().tolist()
-    missing_elements = set(filter_elements) - set(returned_elements)
-    issues_df = pd.DataFrame(list(missing_elements), columns=[column_name])
-    
-    # Print the results
-    if not issues_df.empty:
-        print("Fail - not all elements were retrieved")
-    else:
-        print("Pass - everything found! ")
-    
-    update_logbook(test_number=test_number, issues_list= issues_df, 
-                   test_step=test_step, test='testing missing elements in columns')
-    
 
 def test_hierarchy_reach(test_number, mode, gam_info, df, key, metric_col, test_step):
     """
@@ -167,43 +318,7 @@ def test_adding_wseWWW_enw(start, test_val, end, test_number, test_step='', ):
     update_logbook(test_number, df, 
                    'testing addition of services / platform', test_step)
 
-#def test_increased_knownColVals(df, col, before, after, test_number, test_step):
-    
 
-def test_inner_join(df_left, df_right, key, test_number, test_step='', focus='both'):
-    resulting_df = df_left[key].merge(df_right[key], on=key, how='outer', indicator=True, 
-                                      suffixes=('_left', '_right'))
-    
-    # Initialize issue dataframes
-    issue_df_left = pd.DataFrame()
-    issue_df_right = pd.DataFrame()
-    
-    # Test to ensure no data is lost from df_left
-    if (resulting_df[resulting_df['_merge'] == 'left_only'].shape[0] > 0) & (focus !='right'):
-        issue_df_left = resulting_df[resulting_df['_merge'] == 'left_only']
-    
-    # Test to ensure no data is lost from df_right
-    if (resulting_df[resulting_df['_merge'] == 'right_only'].shape[0] > 0) & (focus !='left'):
-        issue_df_right = resulting_df[resulting_df['_merge'] == 'right_only']
-    
-    # Check if there are any issues with the join
-    if issue_df_left.empty and issue_df_right.empty:
-        print(f"Inner join test {test_number} successful: No issues found.")
-    else:
-        
-        print(f"Inner join test {test_number} failed: Issues found.")
-        if not issue_df_left.empty:
-            issue_df_left = issue_df_left.drop_duplicates()
-            
-            print(f"Issues with df_left (rows present in df_left but not in df_right)")
-            
-        if not issue_df_right.empty:
-            issue_df_right = issue_df_right.drop_duplicates()
-            
-            print(f"Issues with df_right (rows present in df_right but not in df_left)")
-            
-    update_logbook(test_number, pd.concat([issue_df_left, issue_df_right]), 
-                   test='testing inner join - dataloss between two tables', test_step=test_step)
 
 def test_join_rowCount(df_left, df_right, key, test_number, test_step=''):
     ''' this test ensures a join won't add additional rows to the reach data '''
@@ -284,18 +399,6 @@ def test_negative_values(df, column, test_number, test_step=''):
         print("Pass - No negative values")
     update_logbook(test_number, issues_df, 'testing the combination of columns for negative', test_step)
 
-# Test to check if the country percentage adds up to a 100% #former test_country_percentage
-def test_percentage(df, groupby_columns, test_number, test_step, percentage_col='country_%'):
-
-    test_df = df.copy()
-    
-    # Group by fb_page_name and fb_metric_end_time, and sum country_%
-    test_df[percentage_col] = test_df[percentage_col] * 100
-    test_df = test_df.groupby(groupby_columns)[percentage_col].sum().reset_index()
-    test_df[percentage_col] = test_df[percentage_col].round(0)
-    issues_df = test_df[test_df[percentage_col] != 100.0]
-
-    update_logbook(test_number, issues_df, 'testing country percentage', test_step)
 
 # test same values
 def test_same_values(df1, df2, key, test_col, test_number, test_step=''):
@@ -347,62 +450,6 @@ def test_weeks_presence(key, main_data, week_lookup, test_number, test_step=''):
         print(missing_weeks)
     update_logbook(test_number, missing_weeks, 'all weeks in dataset', test_step)
 
-
-def test_weeks_presence_per_account(key, id_column,
-                                    main_data, week_lookup, test_number, test_step=''):
-    """
-    Function to check if all weeks from the week lookup dataframe are present in the main dataset for each group of ids.
-
-    Parameters:
-    key (str): Column name for the week information.
-    id_column (str): Column name for the id information.
-    week_lookup (pd.DataFrame): DataFrame containing week lookup information.
-    main_data (pd.DataFrame): DataFrame containing the main dataset.
-
-    Returns:
-    pd.DataFrame: DataFrame containing missing weeks for each group if any, otherwise an empty DataFrame.
-    """
-    # make copies
-    main_test_data = main_data.copy()
-    week_lookup_test_data = week_lookup.copy()
-    
-    if key != 'Week Number':
-        
-        # ensure both are in the same dtype
-        main_data[key] = pd.to_datetime(main_data[key])
-        week_lookup[key] = pd.to_datetime(week_lookup[key])
-    
-    # Initialize a DataFrame to store missing weeks
-    missing_weeks_df = pd.DataFrame(columns=[id_column, key])
-
-    # Group the main data by id_column
-    grouped_main_data = main_data.groupby(id_column)
-
-    # Iterate over each group
-    for group_id, group_data in grouped_main_data:
-        # Perform the join operation for the current group
-        merged_data = pd.merge(group_data, week_lookup, on=key, how='inner')
-
-        # Check for missing weeks in the current group
-        missing_weeks = week_lookup[~week_lookup[key].isin(merged_data[key])].copy()
-
-        if not missing_weeks.empty:
-            # Add the group id to the missing weeks DataFrame using .loc
-            missing_weeks.loc[:, id_column] = group_id
-            # Ensure the DataFrame is not empty before concatenation
-            if not missing_weeks_df.empty:
-                missing_weeks_df = pd.concat([missing_weeks_df, missing_weeks], ignore_index=True)
-            else:
-                missing_weeks_df = missing_weeks
-
-    if missing_weeks_df.empty:
-        print("All weeks are present in the dataset for each group.")
-    else:
-        print("Missing weeks for each group:")
-        print(missing_weeks_df)
-    
-    update_logbook(test_number, missing_weeks_df, 'all weeks in dataset for each group', test_step)
-
     
 def update_logbook(test_number, issues_list, test='', test_step=''):
     """
@@ -414,9 +461,17 @@ def update_logbook(test_number, issues_list, test='', test_step=''):
     """
     print('...updating logbook...\n')
     logbook_path = "../test/test_logbook.xlsx"
-    # Load the entire workbook
-    book = load_workbook(logbook_path)
-    
+
+    # ✅ If logbook does not exist, create it with headers
+    if not os.path.exists(logbook_path):
+        print("Logbook not found. Creating a new one...")
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+        headers = ['test number', 'timestamp', 'pass/fail', 'check file', 'test', 'step']
+        ws.append(headers)
+        wb.save(logbook_path)
+
     # Load the specific sheet into a DataFrame
     logbook_df = pd.read_excel(logbook_path, sheet_name='Sheet1', engine='openpyxl')
     
@@ -445,9 +500,22 @@ def update_logbook(test_number, issues_list, test='', test_step=''):
         os.makedirs(file_path, exist_ok=True)
 
         issues_df = pd.DataFrame(issues_list)
+        if 'Channel ID' in issues_df.columns:
+            social_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype={'Channel ID': 'str'},
+                                     sheet_name='Social Media Accounts new')[['Channel ID', 'Channel Name']]
+            try:
+                socialmedia_accounts['Channel ID'] = socialmedia_accounts['Channel ID'].dropna().apply(lambda x: str(int(x)))
+            except:
+                pass
+            issues_df.merge(social_accounts, on='Channel ID', how='left')
+            if 'Channel Name' in issues_df.columns:
+                # Reorder columns: Channel ID next to Channel Name
+                cols = ['Channel ID', 'Channel Name'] + [c for c in issues_df.columns if c not in ['Channel ID', 'Channel Name']]
+                issues_df = issues_df[cols]
+
         issues_df.to_csv(file_path+file_name, index=False)
         logbook_df.loc[logbook_df['test number'] == test_number, 'pass/fail'] = 'fail'
-        logbook_df.loc[logbook_df['test number'] == test_number, 'check file'] = file_name
+        logbook_df.loc[logbook_df['test number'] == test_number, 'check file'] = file_path+file_name
     else:
         logbook_df.loc[logbook_df['test number'] == test_number, 'pass/fail'] = 'pass'
         logbook_df.loc[logbook_df['test number'] == test_number, 'check file'] = 'no file created :)'

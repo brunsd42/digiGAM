@@ -62,7 +62,7 @@ channel_ids = socialmedia_accounts['Channel ID'].tolist()
 
 # # activity
 
-# In[5]:
+# In[18]:
 
 
 metric_ids = ['saved', 
@@ -79,22 +79,35 @@ metric_ids = ['saved',
 
 # content level / post level
 sql_query = f""" 
-    SELECT 
-        ig_user_id, 
-        ig_media_id, 
-        ig_metric_id, 
-        ig_metric_period, 
-        ig_metric_end_time, 
-        ig_metric_breakdown, 
-        ig_metric_value
-    FROM 
-        redshiftdb.central_insights.ig_media_insights
+    SELECT
+        p.week_commencing AS w/c,
+        p.account_id,
+        p.page_id AS ig_user_id,
+        p.page_name,
+        GREATEST(0, SUM(COALESCE(p.engagements_week_diff, p.engagements))) AS engagements,
+        GREATEST(0, SUM(COALESCE(p.comments_week_diff, p.comments))) AS comments,
+        GREATEST(0, SUM(COALESCE(p.media_views_week_diff, p.video_views))) AS impressions,
+        GREATEST(0, SUM(
+            CASE
+                WHEN UPPER(p.media_type) = 'VIDEO' THEN COALESCE(p.media_views_week_diff, p.video_views)
+                ELSE 0
+            END
+        )) AS media_views,
+        GREATEST(0, MAX(r.weekly_reach)) AS weekly_reach
+    FROM
+        central_insights.adverity_social_instagram_by_posts AS p
+    LEFT JOIN
+        central_insights.adverity_social_instagram_by_reach AS r
+        ON p.week_commencing = r.week_commencing
+        AND p.account_id = r.account_id
     WHERE
-        ig_metric_period = 'weekdiff'
-        AND
-        ig_metric_end_time BETWEEN '{gam_info['weekEnding_start']}' and '{gam_info['weekEnding_end']}'
-    ;
-    """
+        p.week_commencing Between '{gam_info['w/c_start']}' and '{gam_info['w/c_end']}'
+    GROUP BY
+        p.week_commencing,
+        p.account_id,
+        p.page_id,
+        p.page_name;
+        """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_activity_redshift_extract.csv"
 df = execute_sql_query(sql_query)
 
@@ -103,14 +116,19 @@ df['ig_media_id'] = df['ig_media_id'].astype(str)
 df.to_csv(file, index=False, na_rep='')
 
 
-# In[6]:
+# In[20]:
+
+
+df
+
+
+# In[ ]:
 
 
 ig_views = pd.read_csv(file, keep_default_na=False)
 
 ig_views['ig_user_id'] = ig_views['ig_user_id'].astype(str) 
-ig_views['ig_media_id'] = ig_views['ig_media_id'].astype(str) 
-ig_views['ig_metric_end_time'] = pd.to_datetime(ig_views['ig_metric_end_time'])
+ig_views['w/c'] = pd.to_datetime(ig_views['w/c'])
 # Run the tests
 column_name = 'ig_user_id'
 test_functions.test_filter_elements_returned(ig_views, channel_ids, column_name, 
@@ -127,7 +145,7 @@ test_functions.test_weeks_presence('week_ending',
 
 # # metadata
 
-# In[7]:
+# In[ ]:
 
 
 sql_query = f""" 
@@ -172,7 +190,7 @@ ig_metadata.sample()
 
 # # combine media metrics and their metadata
 
-# In[8]:
+# In[ ]:
 
 
 ig_views = ig_views.rename(columns={'ig_metric_end_time': 'week_ending'})
@@ -189,7 +207,7 @@ ig_combine.columns
 
 # ## processing
 
-# In[9]:
+# In[ ]:
 
 
 # to get to account level 
@@ -219,7 +237,7 @@ test_functions.test_duplicates(ig_media_to_user, ['ig_user_id', 'week_ending'],
 
 # ## user insights
 
-# In[10]:
+# In[ ]:
 
 
 # account level (would also contain content level but we don't what this here wil be replaced )
@@ -264,7 +282,7 @@ test_functions.test_weeks_presence('week_ending', ig_userInsights.rename(columns
                                    week_tester, '1_IG_10', "ig_user_insights sql query")
 
 
-# In[11]:
+# In[ ]:
 
 
 # Pivot the DataFrame
@@ -294,7 +312,7 @@ ig_user_by_userInsights_allWeeks = joining_allWeeks_perChannel(ig_user_by_userIn
 
 # # combine 
 
-# In[12]:
+# In[ ]:
 
 
 # excluded from left 'impressions', 'reach'
@@ -317,7 +335,7 @@ test_functions.test_inner_join(ig_media_to_user[left_cols],
 
 # # user metadata redshift query 
 
-# In[13]:
+# In[ ]:
 
 
 sql_query = f""" 
@@ -366,7 +384,7 @@ test_functions.test_weeks_presence('week_ending', ig_userMetadata,
 ig_userMetadata.sample()
 
 
-# In[14]:
+# In[ ]:
 
 
 # just a clean list of the overview columns 
@@ -379,7 +397,7 @@ ig_userMetadata_slim = ig_userMetadata[cols].drop_duplicates()
 ig_userMetadata_slim.shape
 
 
-# In[15]:
+# In[ ]:
 
 
 # combine all
@@ -399,7 +417,7 @@ ig_combine_final.to_csv(f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{
 
 # ### milestone II
 
-# In[16]:
+# In[ ]:
 
 
 ig_engagements = ig_combine_final.merge(week_tester[['week_ending', 'w/c']], on='week_ending', how='left')
@@ -438,7 +456,7 @@ ig_engagements['Channel ID'] = ig_engagements['Channel ID_x'].fillna('Channel ID
 ig_engagements = ig_engagements.drop(columns=['Channel ID_x', 'Channel ID_y'])
 
 
-# In[17]:
+# In[ ]:
 
 
 ig_engagements_name_matched = ig_engagements[ig_engagements['_merge'] == 'both']
@@ -468,7 +486,7 @@ ig_engagements_final.to_csv(f"../data/processed/{platformID}/{gam_info['file_tim
 
 # ### Milestone III
 
-# In[18]:
+# In[ ]:
 
 
 # Define the multiplier mapping
@@ -542,7 +560,7 @@ ig_engagements_final.to_csv(f"../data/processed/{platformID}/{gam_info['file_tim
                           index=None)
 
 
-# In[19]:
+# In[ ]:
 
 
 ig_engagements_final[(ig_engagements_final['Channel ID'] =='17841401606325704')]

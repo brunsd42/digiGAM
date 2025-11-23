@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[1]:
 
 
 platformID = 'INS'
 
 
-# In[3]:
+# In[2]:
 
 
 from datetime import datetime
@@ -20,7 +20,7 @@ import psycopg2
 
 # ## import helper 
 
-# In[5]:
+# In[3]:
 
 
 import sys
@@ -42,7 +42,7 @@ from functions import execute_sql_query
 import test_functions 
 
 
-# In[6]:
+# In[4]:
 
 
 # country
@@ -60,28 +60,22 @@ socialmedia_accounts = pd.read_excel(f"../helper/ins_account_lookup.xlsx")
 
 # # ingestion
 
-# In[8]:
+# In[5]:
 
 
-sql_query = f""" 
+sql_query = f"""
     SELECT 
-        ig_user_id, 
-        ig_user_name, 
-        ig_metric_id, 
-        ig_metric_period, 
-        ig_metric_breakdown, 
-        ig_metric_end_time, 
-        ig_metric_value
-    FROM 
-        redshiftdb.central_insights.ig_user_insights
+        page_id,
+        page_name,
+        week_commencing,
+        period,
+        country_name,
+        followers_by_demographic
+    FROM
+        redshiftdb.central_insights.adverity_social_instagram_by_page_demo
     WHERE
-        (
-        ig_metric_id = 'audience_country'
-        AND 
-        ig_metric_period = 'lifetime'
-        AND
-        ig_metric_end_time BETWEEN '{gam_info['weekEnding_start']}' and '{gam_info['weekEnding_end']}')
-    ;
+        week_commencing Between '{gam_info['w/c_start']}' and '{gam_info['w/c_end']}'
+        ;
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_userCountry_redshift_extract.csv"
 
@@ -113,26 +107,13 @@ ig_country_df_sum.to_csv(f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_
                            index=None)
 
 
-# In[10]:
+# In[6]:
 
 
-df.sample()
+df
 
 
-# In[12]:
-
-
-df['ig_user_name'].unique()
-
-
-# In[11]:
-
-
-# can't find this channel 17841402094893665 ()
-df['ig_user_id'].sort_values().unique()
-
-
-# In[7]:
+# In[ ]:
 
 
 # week
@@ -170,13 +151,13 @@ ig_country_df = ig_country_df.drop(columns=['ServiceName_x', 'ServiceName_y',
                                             'Channel ID_x', 'Channel ID_y'])
 
 
-# In[8]:
+# In[ ]:
 
 
 ig_country_df.columns
 
 
-# In[9]:
+# In[ ]:
 
 
 ig_country_df.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_geog.csv", 
