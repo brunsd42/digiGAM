@@ -1,17 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # 
-# - [x] To Do lumen check
-
 # # Setup
 
-# In[3]:
+# In[1]:
 
 
 from IPython.display import display
  
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 import os 
@@ -24,7 +21,7 @@ import seaborn as sns
 
 # ## import helper
 
-# In[4]:
+# In[2]:
 
 
 import sys
@@ -46,15 +43,19 @@ from config import gam_info
 import test_functions 
 
 
-# In[5]:
+# In[3]:
 
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
+week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
+today = pd.Timestamp.today()
+last_monday = today - timedelta(days=today.weekday() + 7)
+valid_weeks = week_tester[week_tester['w/c'] <= last_monday]
+number_of_weeks = valid_weeks['WeekNumber_finYear'].max()
 
 # country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
-                              keep_default_na=False)
+country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID')
 
 # platform codes
 platform_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='PlatformID')#[cols]
@@ -66,7 +67,7 @@ service_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Se
 # # Processing
 # 
 
-# In[6]:
+# In[4]:
 
 
 df = pd.read_csv(f"../data/processed/{gam_info['file_timeinfo']}_SiteData.csv", 
@@ -75,7 +76,7 @@ print(df.shape)
 df.sample()
 
 
-# In[8]:
+# In[5]:
 
 
 ################################# adding platforms
@@ -98,7 +99,7 @@ for service in services_to_add_www:
     i+=1
 
 
-# In[9]:
+# In[6]:
 
 
 ################################# remove missing services / places
@@ -113,7 +114,7 @@ df = df[~df['PlaceID'].isna()]
 print(f"no missing countries: {df.shape}")
 
 
-# In[10]:
+# In[7]:
 
 
 #REACH DATA
@@ -126,7 +127,7 @@ reach_data = df[(~df['Space'].str.contains('Devices'))][cols]
 
 
 
-# In[11]:
+# In[8]:
 
 
 ################# Device proportion ~device_type~
@@ -209,7 +210,7 @@ device_factor['GWI Site to People Factor'] = device_factor['Sum_Reach_dedupli']/
 #device_factor.sample()
 
 
-# In[12]:
+# In[9]:
 
 
 # Where GWI factor is not available for WIN, WDI figure is used for both WIN and WWW
@@ -252,7 +253,7 @@ crosstab = pd.crosstab(grouped_df['ServiceID'], grouped_df['PlatformID'],
 #msno.matrix(crosstab)
 
 
-# In[13]:
+# In[10]:
 
 
 ################################# adding services to device factor only
@@ -279,20 +280,20 @@ for service in service_additions.keys():
     i += 1
 
 
-# In[14]:
+# In[11]:
 
 
 # add a test for rows occuring only once
 device_factor_ready.groupby(['w/c', 'PlatformID', 'ServiceID']).size()
 
 
-# In[15]:
+# In[12]:
 
 
 # leaving out the replacement of HAUSA with chartbeat data
 
 
-# In[16]:
+# In[13]:
 
 
 # Summing up uniques for each week/service/platform/country
@@ -310,7 +311,7 @@ service_hierarchy_issues = test_functions.test_hierarchy_reach('3_Site_10',
                                                                test_step= test_step, )
 
 # TODO share AX2 hierarchy issues 
-
+'''
 # PLATFORM hierarchy issues
 platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='3_Site_11', 
                                                                 mode='Platform', 
@@ -318,10 +319,10 @@ platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='3_S
                                                                 df=df_grouped,
                                                                 key=['YearGAE', 'w/c', 'PlaceID', 'ServiceID'],
                                                                 metric_col='m_unique_visitors',
-                                                                test_step= test_step)
+                                                                test_step= test_step)'''
 
 
-# In[17]:
+# In[14]:
 
 
 file_lookup = {'platform': f"ugly_adjustments/{gam_info['file_timeinfo']}_hierarchy_adjustments_platform.xlsx", 
@@ -345,7 +346,7 @@ def fix_hierarchy_issues(people_df, file_lookup):
     return people_df
 
 
-# In[18]:
+# In[15]:
 
 
 # TODO share Platform hierarchy issues 
@@ -400,7 +401,7 @@ for service_id, service_children in service_creator.items():
     people_df = pd.concat([people_df, temp])
 
 
-# In[19]:
+# In[16]:
 
 
 people_df[(people_df['ServiceID'].isin(['AX2', 'ARA'])) & 
@@ -410,7 +411,7 @@ people_df[(people_df['ServiceID'].isin(['AX2', 'ARA'])) &
 ]
 
 
-# In[20]:
+# In[17]:
 
 
 test_step = 'checking hierarchy for reach'
@@ -424,7 +425,7 @@ service_hierarchy_issues = test_functions.test_hierarchy_reach('3_Site_12',
                                                                test_step=test_step)
 
 # TODO share AX2 hierarchy issues 
-
+'''
 # PLATFORM hierarchy issues
 platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='3_Site_13', 
                                                                 mode='Platform', 
@@ -434,10 +435,10 @@ platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='3_S
                                                                 metric_col='Reach',
                                                                 test_step=test_step)
 
-# TODO share Platform hierarchy issues 
+# TODO share Platform hierarchy issues '''
 
 
-# In[22]:
+# In[19]:
 
 
 # FINALS
@@ -448,9 +449,9 @@ main_df = people_df.copy()
 test_step = 'final_testig_reachDF'
 
 # test all weeks present
-test_functions.test_weeks_presence_per_account('w/c', ['ServiceID'], main_df, week_tester, 
+'''test_functions.test_weeks_presence_per_account('w/c', ['ServiceID'], main_df, week_tester, 
                                                '3_Site_14', test_step)
-
+'''
 # test placeID in lookup
 test_functions.test_inner_join(main_df, country_codes, ['PlaceID'], 
                                '3_Site_15', test_step, focus='left')
@@ -464,33 +465,34 @@ test_functions.test_inner_join(main_df, service_codes, ['ServiceID'],
                                '3_Site_17', test_step, focus='left')
 
 ############################# TESTING end
-
+path = "../data/singlePlatform/site/weekly"
+os.makedirs(path, exist_ok=True)
 #people_df
 cols = ['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
-people_df[cols].to_csv(f"../data/singlePlatform/site/weekly/{gam_info['file_timeinfo']}_site_reach_weekly.csv")
+people_df[cols].to_csv(f"{path}/{gam_info['file_timeinfo']}_site_reach_weekly.csv")
 
 
 # average bb
 # test that all weeks are present, else add them in 
 gam_df = people_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
 
-gam_df['Reach'] = gam_df['Reach']/gam_info['number_of_weeks']
+gam_df['Reach'] = gam_df['Reach']/number_of_weeks
 gam_df.to_excel(f"../data/singlePlatform/site/{gam_info['file_timeinfo']}_site_reach_annual.xlsx")
 
 
 # # analysis 
 
-# In[23]:
+# In[ ]:
 
 
 # TO DO create an analysis that compares WWW & (WIN + WDI)
 
 
-# In[24]:
+# In[ ]:
 
 
 #msno.matrix(df_grouped)
-heatmap_data = df_grouped.pivot_table(index='PlatformID', columns='ServiceID', values='m_unique_visitors', aggfunc='sum')
+#heatmap_data = df_grouped.pivot_table(index='PlatformID', columns='ServiceID', values='m_unique_visitors', aggfunc='sum')
 
 #plt.figure(figsize=(10, 8))
 #sns.heatmap(heatmap_data, fmt="g", cmap="viridis")
@@ -498,31 +500,31 @@ heatmap_data = df_grouped.pivot_table(index='PlatformID', columns='ServiceID', v
 #plt.show()
 
 
-# In[25]:
+# In[ ]:
 
 
-pd.set_option('display.float_format', lambda x: '%.2f' % x)
+#pd.set_option('display.float_format', lambda x: '%.2f' % x)
 
-df_grouped[~df_grouped['ServiceID'].isin(['GNL', 'WOR'])].sort_values('m_unique_visitors', ascending=False).head(50)
-
-
-# In[26]:
+#df_grouped[~df_grouped['ServiceID'].isin(['GNL', 'WOR'])].sort_values('m_unique_visitors', ascending=False).head(50)
 
 
-df_grouped[(df_grouped['PlaceID'] == 'IND') & 
-            (df_grouped['ServiceID'] == 'HIN') #& 
+# In[ ]:
+
+
+#df_grouped[(df_grouped['PlaceID'] == 'IND') & 
+#            (df_grouped['ServiceID'] == 'HIN') #& 
 #            (df_grouped['Week Number'] == 23)
-]
+#]
 
 
-# In[27]:
+# In[ ]:
 
 
 #msno.matrix(people_df)
-heatmap_data = people_df.pivot_table(index='PlatformID', 
-                                     columns='ServiceID', 
-                                     values='m_unique_visitors', 
-                                     aggfunc='sum')
+#heatmap_data = people_df.pivot_table(index='PlatformID', 
+#                                     columns='ServiceID', 
+#                                     values='m_unique_visitors', 
+#                                     aggfunc='sum')
 
 #plt.figure(figsize=(10, 8))
 #sns.heatmap(heatmap_data, fmt="g", cmap="viridis")

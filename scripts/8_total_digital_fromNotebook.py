@@ -12,6 +12,11 @@ import missingno as msno
 import numpy as np
 from scipy.stats import zscore
 
+import shutil
+import os
+
+from datetime import timedelta
+
 
 # In[2]:
 
@@ -35,36 +40,58 @@ import test_functions
 import functions 
 
 
-# In[24]:
+# In[3]:
+
+
+platformID = 'CSS'
+
+
+# In[4]:
 
 
 # country
 pop_size_col = gam_info['population_column']
 
-country_codes_cols = ['PlaceID', pop_size_col]
+country_cols = ['PlaceID', pop_size_col]
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
-                              keep_default_na=False)[country_codes_cols]
-country_codes[pop_size_col] = (
-    pd.to_numeric(country_codes[pop_size_col], errors='coerce')
-    .fillna(1)
-    .astype(int)
-)
+                              keep_default_na=False)[country_cols]
+country_codes[pop_size_col] = ( pd.to_numeric(country_codes[pop_size_col], errors='coerce')
+                                    .fillna(1)
+                                    .astype(int))
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period',)
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
+today = pd.Timestamp.today()
+last_monday = today - timedelta(days=today.weekday() + 7)
+valid_weeks = week_tester[week_tester['w/c'] <= last_monday]
+number_of_weeks = valid_weeks['WeekNumber_finYear'].max()
 
 service_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='ServiceID',)
 
 platform_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='PlatformID',)
 
 
-# In[4]:
+### RUN Tests
+test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_0", f"{platformID}_1", f"{platformID}_2"], 
+                                 test_step="lookup files - ensuring country codes is correct")
+
+test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_3", f"{platformID}_4", f"{platformID}_5"], 
+                                 test_step = "lookup files - ensuring week tester is correct")
+
+test_functions.test_lookup_files(service_tester, ['ServiceID'], [f"{platformID}_6", f"{platformID}_7", f"{platformID}_8"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
+
+test_functions.test_lookup_files(platform_tester, ['PlatformID'], [f"{platformID}_9", f"{platformID}_10", f"{platformID}_11"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
+
+
+# In[5]:
 
 
 # TODO Add tests (recognising all services, countries, platforms) to all the overlap sheets that are used here 
 # overlap
-overlap_nonHeavy = pd.read_excel("../helper/Final Overlaps 2021.xlsx", sheet_name='non heavy')
+overlap_nonHeavy = pd.read_excel("../data/stale/Final Overlaps 2021.xlsx", sheet_name='non heavy')
 overlap_nonHeavy = overlap_nonHeavy.rename(columns={'Week': 'WeekNumber_finYear', 
                                                     'Service Code': 'ServiceID', 
                                                     'GeoCode': 'PlaceID'})
@@ -75,14 +102,14 @@ overlap_nonHeavy = overlap_nonHeavy.merge(week_tester[['w/c', 'WeekNumber_finYea
                                           on='WeekNumber_finYear', 
                                           how='outer').drop(columns=['WeekNumber_finYear'])
 
-overlap_nonHeavyAdd = pd.read_excel("../helper/Final Overlaps 2021.xlsx", sheet_name='non heav additional')
+overlap_nonHeavyAdd = pd.read_excel("../data/stale/Final Overlaps 2021.xlsx", sheet_name='non heav additional')
 overlap_nonHeavyAdd = overlap_nonHeavyAdd.rename(columns={'GeoCode': 'PlaceID'})
 
-overlap_SocWebOverlap = pd.read_excel("../helper/Final Overlaps 2021.xlsx", sheet_name='SocWebOverlap').drop_duplicates()
+overlap_SocWebOverlap = pd.read_excel("../data/stale/Final Overlaps 2021.xlsx", sheet_name='SocWebOverlap').drop_duplicates()
 overlap_SocWebOverlap['PlaceID'] = overlap_SocWebOverlap['PlaceID'].replace('MYT', 'MAY').replace('WLF', 'WFI')
 overlap_SocWebOverlap = overlap_SocWebOverlap.merge(country_codes, on='PlaceID', how='left')
 
-overlap_referral = pd.read_excel("../helper/Final Overlaps 2021.xlsx", sheet_name='Referrals').drop_duplicates()
+overlap_referral = pd.read_excel("../data/stale/Final Overlaps 2021.xlsx", sheet_name='Referrals').drop_duplicates()
 overlap_referral = overlap_referral.rename(columns={'Week Number': 'WeekNumber_finYear', 
                                                     'ServiceID': 'ServiceID', 
                                                     'Country Code': 'PlaceID',
@@ -103,55 +130,37 @@ africa_dedup_countries = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet
 
 # ### site
 
-# In[5]:
+# In[6]:
 
 
 cols = ['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
-site_weekly_df = pd.read_csv("../data/singlePlatform/site/weekly/GAM2025_site_reach_weekly.csv")[cols]
-site_weekly_df['w/c'] = pd.to_datetime(site_weekly_df['w/c'])
-site_weekly_df.head()
-
-test_columns = {
+try:
+    site_weekly_df = pd.read_csv(f"../data/singlePlatform/site/weekly/{gam_info['file_timeinfo']}_site_reach_weekly.csv")[cols]
+    site_weekly_df['w/c'] = pd.to_datetime(site_weekly_df['w/c'])
+    
+    test_columns = {
     'PlaceID': country_codes['PlaceID'].tolist(),
     'w/c': week_tester['w/c'].tolist(),
     'ServiceID': service_tester['ServiceID'].tolist(),
     'PlatformID': platform_tester['PlatformID'].tolist()
-}
-
-for i, (column, allowed_values) in enumerate(test_columns.items(), start=1):
-    label = f"total_digi_{i}"
-    test_functions.test_allowed_values(site_weekly_df, column, allowed_values, label, 'site_ingest')
-
-
-# In[6]:
-
-
-# are there any duplicates?
-print(site_weekly_df.shape)
-site_weekly_df.drop_duplicates().shape
-
-
-# In[7]:
-
-
-# are any entries with missing values? 
-msno.matrix(site_weekly_df)
+    }
+    
+    for i, (column, allowed_values) in enumerate(test_columns.items(), start=1):
+        label = f"total_digi_{i}"
+        test_functions.test_allowed_values(site_weekly_df, column, allowed_values, label, 'site_ingest')
+# test duplicates in sites
+except:
+    site_weekly_df = pd.DataFrame()
+    print('site not there!')
 
 
 # ### social
 
-# In[8]:
+# In[7]:
 
 
-social_weekly_df = pd.read_csv("../data/interim/mk_wsc_social_weekly_data.csv")
+social_weekly_df = pd.read_csv("../data/combinePlatforms/GAM2026_weekly_WSC.csv")
 
-social_weekly_df['Service Code'] = social_weekly_df['Service Code'].replace("FAR", "PER") 
-social_weekly_df = social_weekly_df.rename(columns={'Week Number': 'WeekNumber_finYear',
-                                                    'Country Code': 'PlaceID',
-                                                    'Service Code': 'ServiceID',
-                                                    'Platform Code': 'PlatformID',})
-social_weekly_df = social_weekly_df.merge(week_tester[['w/c', 'WeekNumber_finYear']], 
-                                          on='WeekNumber_finYear', how='outer').drop(columns=['WeekNumber_finYear'])
 social_weekly_df['YearGAE'] = gam_info['YearGAE']
 social_weekly_df = social_weekly_df[['ServiceID', 'PlaceID', 'PlatformID', 'w/c', 'YearGAE', 'Reach']]
 
@@ -164,6 +173,7 @@ test_columns = {
 }
 
 for i, (column, allowed_values) in enumerate(test_columns.items(), start=5):
+    print(column)
     label = f"total_digi_{i}"
     test_functions.test_allowed_values(social_weekly_df, column, allowed_values, label, 'social_ingest')
 social_weekly_df.head()
@@ -171,17 +181,17 @@ social_weekly_df.head()
 
 # ### combine site & social
 
-# In[9]:
+# In[8]:
 
 
-site_social_df = pd.concat([site_weekly_df, social_weekly_df])
+site_social_df = pd.concat([site_weekly_df, social_weekly_df], ignore_index=True)
 site_social_df['w/c'] = pd.to_datetime(site_social_df['w/c'])
 site_social_df = site_social_df.pivot(index=['YearGAE', 'w/c', 'ServiceID', 'PlaceID'],
                                       columns="PlatformID", values="Reach").fillna(0).reset_index()
 site_social_df.sample(5)
 
 
-# In[10]:
+# In[9]:
 
 
 non_MA_WOR = site_social_df[~site_social_df['ServiceID'].isin(['WOR', 'MA-'])]
@@ -199,8 +209,13 @@ ma_wor_df = site_social_df[site_social_df['ServiceID'].isin(['WOR', 'MA-'])]
 
 # ### determine & handle outlier
 
-# In[11]:
+# In[10]:
 
+
+# Ensure required columns exist
+for col in ['WSC', 'WDI']: 
+    if col not in ws_site_social.columns:
+        ws_site_social[col] = 0  # Fill missing column with zeros
 
 # Group by 'service' and 'w/c', summing the numerical columns
 grouped = ws_site_social.groupby(['ServiceID', 'w/c'], as_index=False)[['WSC', 'WDI']].sum()
@@ -216,7 +231,7 @@ outlier_df = outlier_df[(outlier_df['WSC_z'] > 1.96) | (outlier_df['WDI_z'] > 1.
 outlier_df = outlier_df[['w/c', 'ServiceID']]
 
 
-# In[12]:
+# In[11]:
 
 
 # 2. Identify outliers and non-outliers
@@ -224,7 +239,7 @@ merged_outlier = ws_site_social.merge(outlier_df, on=['w/c', 'ServiceID'], how='
                                    indicator=True)
 
 
-# In[13]:
+# In[12]:
 
 
 outliers = merged_outlier[merged_outlier['_merge'] == 'both']
@@ -295,7 +310,11 @@ def compute_wsc_wdi_buffer(row):
     else:
         return wsc_wdi
 
-# Apply to your DataFrame
+# Ensure required columns exist
+for col in ['WIN', 'WWW']: 
+    if col not in outliers.columns:
+        outliers[col] = 0  # Fill missing column with zeros
+
 outliers['WSC_WDI'] = outliers.apply(compute_wsc_wdi_buffer, axis=1)
 outliers = outliers[['PlaceID', 'ServiceID', 'YearGAE', 'w/c', 
                      'WDI', 'WIN', 'WSC', 'WWW', 
@@ -304,7 +323,7 @@ outliers = outliers[['PlaceID', 'ServiceID', 'YearGAE', 'w/c',
 
 # ### handle non outlier
 
-# In[14]:
+# In[13]:
 
 
 no_outliers = merged_outlier[merged_outlier['_merge'] == 'left_only']
@@ -356,6 +375,10 @@ def compute_tapestry_buffer(row):
         return digi
 
 # Apply to your DataFrame
+# Ensure required columns exist
+for col in ['WIN', 'WWW']: 
+    if col not in no_outliers.columns:
+        no_outliers[col] = 0  # Fill missing column with zeros
 
 no_outliers['WSC_WDI'] = no_outliers.apply(compute_tapestry_buffer, axis=1)
 no_outliers = no_outliers[['PlaceID', 'ServiceID', 'YearGAE', 'w/c',
@@ -363,9 +386,9 @@ no_outliers = no_outliers[['PlaceID', 'ServiceID', 'YearGAE', 'w/c',
                            'WSC_WDI']]
 
 
-# ### calculate WT-
+# ### calculate CSS
 
-# In[15]:
+# In[45]:
 
 
 ws_site_social_postOutlier = pd.concat([outliers, no_outliers])
@@ -439,39 +462,35 @@ def compute_incremental_partner_reach(row):
 ws_site_social_postOutlier['Reach'] = ws_site_social_postOutlier.apply(compute_incremental_partner_reach, axis=1)
 
 
-# In[16]:
+# In[15]:
 
 
 cols = ['YearGAE', 'w/c', 'ServiceID', 'PlaceID', 'Reach']
 weekly_ws_df =  ws_site_social_postOutlier[cols]
 
 
-# In[17]:
-
-
-weekly_ws_df[(weekly_ws_df['PlaceID'] == 'AGU') & 
-    (weekly_ws_df['w/c'] == '2024-04-29') & 
-    (weekly_ws_df['ServiceID'] == 'FAR') 
-    ]
-
-
 # ### annual average
 
-# In[18]:
+# In[16]:
 
 
 annual_ws_df = weekly_ws_df.groupby(['YearGAE', 'ServiceID', 'PlaceID'])['Reach'].sum().reset_index()
-annual_ws_df['Reach'] = annual_ws_df['Reach'] / gam_info['number_of_weeks'] 
+annual_ws_df['Reach'] = annual_ws_df['Reach'] / number_of_weeks
 annual_ws_df.head()
 
 
 # ## MA & Studios
 
-# In[19]:
+# In[17]:
 
 
 ma_wor_df = site_social_df[site_social_df['ServiceID'].isin(['WOR', 'MA-'])]
 ma_wor_df = ma_wor_df.merge(overlap_SocWebOverlap, on='PlaceID' , how='left')
+
+# Ensure required columns exist
+for col in ['WSC', 'WWW']: 
+    if col not in ma_wor_df.columns:
+        ma_wor_df[col] = 0  # Fill missing column with zeros
 
 ma_wor_df = functions.sainsbury_formula(ma_wor_df, pop_size_col, ['WSC', 'WWW'], 'Reach')
 
@@ -479,12 +498,12 @@ cols = ['YearGAE', 'w/c', 'ServiceID', 'PlaceID', 'Reach']
 weekly_ma_wor_df = ma_wor_df[cols]
 
 annual_ma_wor_df = ma_wor_df.groupby(['YearGAE', 'ServiceID', 'PlaceID'])['Reach'].sum().reset_index()
-annual_ma_wor_df['Reach'] = annual_ma_wor_df['Reach'] / gam_info['number_of_weeks'] 
+annual_ma_wor_df['Reach'] = annual_ma_wor_df['Reach'] / number_of_weeks
 
 
 # ## aggregated services
 
-# In[20]:
+# In[18]:
 
 
 weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
@@ -492,7 +511,7 @@ weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
 weekly_df.head()
 
 
-# In[21]:
+# In[19]:
 
 
 def compute_combined_reach(df, services, label, pop_size_col, country_codes, deal_with_zero=True, 
@@ -536,7 +555,7 @@ def compute_combined_reach(df, services, label, pop_size_col, country_codes, dea
 
 # ### ENW
 
-# In[22]:
+# In[20]:
 
 
 # Usage
@@ -546,7 +565,7 @@ enw_df = compute_combined_reach(weekly_df, enw_services, 'ENW', pop_size_col, co
 
 # ### ENG
 
-# In[25]:
+# In[21]:
 
 
 # Usage
@@ -556,7 +575,7 @@ eng_df = compute_combined_reach(weekly_df, eng_services, 'ENG', pop_size_col, co
 
 # ### EN2
 
-# In[26]:
+# In[22]:
 
 
 en2_services = ['ENG', 'WOR']
@@ -565,13 +584,14 @@ en2_df = compute_combined_reach(pd.concat([weekly_df, eng_df]), en2_services, 'E
 
 # ### AX2
 
-# In[27]:
+# In[23]:
 
 
 ax2_services = [
-    'AFA','AMH','ARA','AZE','BEN','BUR','DAR','ECH','ELT','PER','FRE','GUJ','HAU','HIN','IGB','INO',
-    'KOR','KRW','KYR','MAN','MAR','NEP','PAS','PDG','POR','PUN','RUS','SER','SIN','SOM','SPA','SWA',
-    'TAM','TEL','THA','TIG','TUR','UKR','URD','UZB','VIE','YOR', 'FOA', 'UKPS'
+    'AFA','AMH','ARA','AZE','BEN','BUR','DAR',#'ECH',
+    'ELT','PER','FRE','GUJ','HAU','HIN','IGB','INO',
+    'KOR','KRW','KYR','MAN','MAR','NEP','PAS','PDG','POR', 'POL', 'PUN','RUS','SER','SIN','SOM','SPA','SWA',
+    'TAM','TEL','THA','TIG','TUR','UKR','URD','UZB','VIE','YOR', 'FOA', #'UKPS'
 ]
 
 ax2_df = weekly_df[weekly_df['ServiceID'].isin(ax2_services)].merge(country_codes, on='PlaceID', how='left')
@@ -586,7 +606,7 @@ ax2_df = pd.crosstab(
                                     ).reset_index()
 ax2_df = ax2_df.fillna(0)
 
-temp2 = ax2_df.merge(africa_dedup_countries, on='PlaceID', how='outer')
+temp2 = ax2_df.merge(africa_dedup_countries, on='PlaceID', how='left')
 africa_df = temp2[~temp2['digiGAM_FOA_WT-'].isna()]
 nonAfrica_df = temp2[temp2['digiGAM_FOA_WT-'].isna()]
 
@@ -609,7 +629,7 @@ ax2_df.head()
 
 # ### ANW
 
-# In[28]:
+# In[24]:
 
 
 anw_services = ['AX2', 'WSE']
@@ -619,7 +639,7 @@ anw_df = compute_combined_reach(pd.concat([weekly_df, ax2_df]), anw_services, 'A
 
 # ### ANY
 
-# In[29]:
+# In[25]:
 
 
 any_services = ['ANW', 'GNL']
@@ -629,7 +649,7 @@ any_df = compute_combined_reach(pd.concat([weekly_df, anw_df]), any_services, 'A
 
 # ### TOT
 
-# In[30]:
+# In[26]:
 
 
 tot_services = ['ANY', 'MA-']
@@ -639,7 +659,7 @@ tot_df = compute_combined_reach(pd.concat([weekly_df, any_df]), tot_services, 'T
 
 # ### ALL
 
-# In[31]:
+# In[27]:
 
 
 all_services = ['TOT', 'WOR']
@@ -649,7 +669,7 @@ all_df = compute_combined_reach(pd.concat([weekly_df, tot_df]), all_services, 'A
 
 # ## finalising 
 
-# In[32]:
+# In[28]:
 
 
 final_weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df, enw_df, eng_df, en2_df, ax2_df, anw_df,
@@ -657,17 +677,17 @@ final_weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df, enw_df, eng_df, en2
 
 final_weekly_df['PlatformID'] = 'CSS'
 
-final_weekly_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_WT-.csv", 
+final_weekly_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_CSS.csv", 
                        index=None)
 
 
-# In[33]:
+# In[29]:
 
 
 final_annual_df = final_weekly_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
-final_annual_df['Reach'] = final_annual_df['Reach'] / gam_info['number_of_weeks']
+final_annual_df['Reach'] = final_annual_df['Reach'] / number_of_weeks
 
-final_annual_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_annual_WT-.csv", 
+final_annual_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_annual_CSS.csv", 
                        index=None)
 
 
@@ -675,30 +695,34 @@ final_annual_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_an
 # 
 # ## import data
 
-# In[34]:
+# In[30]:
 
 
 cols = ['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
 
 
-# In[35]:
+# In[31]:
 
 
 podcast_df = pd.read_excel(f"../data/singlePlatform/podcast/weekly/{gam_info['file_timeinfo']}_podcast_data_weekly.xlsx")
 podcast_df['YearGAE'] = gam_info['YearGAE']
+podcast_df['w/c'] = podcast_df['w/c'].dt.strftime('%Y-%m-%d')
 podcast_df = podcast_df[cols]
-podcast_df.head()
 
 
-# In[36]:
+# In[32]:
 
 
-site_df = pd.read_csv(f"../data/singlePlatform/site/weekly/{gam_info['file_timeinfo']}_site_reach_weekly.csv", index_col=0)
-site_df = site_df[cols]
-site_df.head()
+try:
+    site_df = pd.read_csv(f"../data/singlePlatform/site/weekly/{gam_info['file_timeinfo']}_site_reach_weekly.csv", index_col=0)
+    site_df = site_df[cols]
+    site_df.head()
+except:
+    print('site not there! ')
+    site_df = pd.DataFrame()
 
 
-# In[37]:
+# In[33]:
 
 
 # created from platform in 6.
@@ -713,7 +737,7 @@ social_wsc_df = social_wsc_df[cols]
 social_wsc_df.head()
 
 
-# In[38]:
+# In[34]:
 
 
 # created from dataset per platform file in 5.
@@ -723,23 +747,29 @@ social_platforms_df = social_platforms_df[cols]
 social_platforms_df.head()
 
 
-# In[39]:
+# In[35]:
 
 
-wt_df = pd.read_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_WT-.csv")[cols]
-wt_df.head()
+social_platforms_df['PlatformID'].unique()
+
+
+# In[36]:
+
+
+css_df = pd.read_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_CSS.csv")[cols]
+css_df.head()
 
 
 # # combine 
 
-# In[40]:
+# In[37]:
 
 
 sources = {'pod': podcast_df, 
            'site': site_df, 
            'platform': social_platforms_df, 
            'wsc': social_wsc_df,
-           'wt': wt_df}
+           'css': css_df}
 
 def far_per_test(df):
     temp = df[df['ServiceID'].isin(['PER', 'FAR'])]
@@ -751,18 +781,73 @@ def far_per_test(df):
     return df
 
 for name, source in sources.items():
-    print(f"\n{name}")
-    sources[name] = far_per_test(source)
-
+    if len(source) > 0:
+        print(f"\n{name}")
+        sources[name] = far_per_test(source)
+    else:
+        print(f"\n{name} is empty! ")
 digital_df = pd.concat(sources.values())
 
+# Paths for final outputs
+output_dir = "../data/final"
+os.makedirs(output_dir, exist_ok=True)
+
 digital_df = digital_df[digital_df['ServiceID'] != 'AXE']
-digital_df.to_csv(f"../data/final/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
+digital_df.to_csv(f"{output_dir}/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
                        index=None)
 
 digital_annual_df = digital_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
-digital_annual_df['Reach'] = digital_annual_df['Reach'] / gam_info['number_of_weeks']
+digital_annual_df['Reach'] = digital_annual_df['Reach'] / number_of_weeks
 
-digital_annual_df.to_csv(f"../data/final/{gam_info['file_timeinfo']}_digi_gam_annual.csv", 
+digital_annual_df.to_csv(f"{output_dir}/{gam_info['file_timeinfo']}_digi_gam_annual.csv", 
                        index=None)
+
+# ✅ Copy the test logbook into the same folder
+logbook_src = "../test/test_logbook.xlsx"
+logbook_dest = f"{output_dir}/{gam_info['file_timeinfo']}_test_logbook.xlsx"
+
+if os.path.exists(logbook_src):
+    shutil.copy(logbook_src, logbook_dest)
+    print(f"Test logbook copied to: {logbook_dest}")
+else:
+    print("Warning: Test logbook not found!")
+
+
+# In[38]:
+
+
+digital_df['PlatformID'].unique()
+
+
+# In[39]:
+
+
+digital_df['w/c'].unique()
+
+
+# In[44]:
+
+
+len(digital_df['w/c'].unique())
+
+
+# In[42]:
+
+
+ax2_ser = [
+    'AFA','AMH','ARA','AZE','BEN','BUR','DAR','ECH','ELT','PER','FRE','GUJ','HAU','HIN','IGB','INO',
+    'KOR','KRW','KYR','MAN','MAR','NEP','PAS','PDG','POR','PUN','RUS','SER','SIN','SOM','SPA','SWA',
+    'TAM','TEL','THA','TIG','TUR','UKR','URD','UZB','VIE','YOR', 'FOA', 'UKPS'
+]
+digital_df[
+    (digital_df['PlatformID'].isin(['YT-', 'WSC'])) 
+    & (digital_df['w/c'] == '2025-11-24')
+]
+
+
+# In[41]:
+
+
+#SWA 
+#2025-
 

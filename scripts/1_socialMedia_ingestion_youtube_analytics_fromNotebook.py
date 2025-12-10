@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[30]:
+# In[1]:
 
 
 platformID = 'YT-'
@@ -9,7 +9,7 @@ platformID = 'YT-'
 
 # ## import libraries
 
-# In[31]:
+# In[2]:
 
 
 import os
@@ -36,7 +36,7 @@ import psycopg2
 
 # ## import helper 
 
-# In[32]:
+# In[3]:
 
 
 import sys
@@ -58,17 +58,12 @@ from functions import execute_sql_query
 import test_functions
 
 
-# In[33]:
+# In[4]:
 
-
-# country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
-                              keep_default_na=False)
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-week_tester['week_ending'] = pd.to_datetime(week_tester['week_ending'])
 
 # social media accounts
 dtype_dict = {'Channel ID': 'str',
@@ -83,7 +78,14 @@ socialmedia_accounts = socialmedia_accounts.rename(columns={'Excluding UK': 'Cha
 
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
-socialmedia_accounts.sample()
+
+### RUN TESTS
+test_functions.test_lookup_files(week_tester, ['w/c'], [0,1,2],
+                                 test_step = "lookup files - ensuring week tester is correct")
+
+test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [3,4,5], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
+
 
 
 # # Unique Viewers
@@ -92,7 +94,7 @@ socialmedia_accounts.sample()
 
 # ### automated extracts
 
-# In[34]:
+# In[5]:
 
 
 main_path = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_export/"
@@ -102,10 +104,11 @@ main_path = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_export/"
 folder_paths = [f for f in os.listdir(main_path) if os.path.isdir(os.path.join(main_path, f))]
 
 ### TESTING input files ### 
-test_functions.youtube_test_input_files('1_YT_1', folder_paths, main_path, week_tester, test_step='testing automated extracts')
+test_functions.youtube_test_input_files(f'6_{platformID}_engagements', folder_paths, main_path, week_tester, 
+                                        test_step='testing automated extracts')
 
 
-# In[35]:
+# In[6]:
 
 
 # ingest files
@@ -166,7 +169,7 @@ combined_df.loc[:, 'Views'] = pd.to_numeric(combined_df['Views'].fillna(0), erro
 combined_df.loc[:, 'Watch time (hours)'] = pd.to_numeric(combined_df['Watch time (hours)'], errors='raise')
 
 
-# In[36]:
+# In[7]:
 
 
 # TODO: find out from Minnie why Impressions and Impression click-through rate (%) is not in this dataset -> can be ignored
@@ -187,7 +190,7 @@ combined_df.sample()
 # ### manual extracts
 # Media Action and channel by channel exports 
 
-# In[37]:
+# In[8]:
 
 
 #TODO: review with minnie for individual exports
@@ -209,47 +212,45 @@ for filename in os.listdir(path):
             dataframes.append(df)
         except:
             print(filename)
-media_action_df = pd.concat(dataframes)
-
-def get_week_dates(date):
-    if date.weekday() != 6:  # Check if the date is not a Sunday
-        raise ValueError("The input date must be a Sunday.")
+if len(dataframes) > 0:
+    media_action_df = pd.concat(dataframes)
     
-    from_date = date + pd.Timedelta(days=1)  # Monday after the given Sunday
-    to_date = from_date + pd.Timedelta(days=6)  # Sunday after the Monday
-    return from_date, to_date
-
-media_action_df['Date'] = pd.to_datetime(media_action_df['Date'])
-
-# Apply the function to get FromDate and ToDate
-media_action_df['w/c'], media_action_df['week_ending'] = zip(*media_action_df['Date'].apply(get_week_dates))
-
-# Group by Geography, FromDate, ToDate, and filename to sum Views
-media_action_df = media_action_df.groupby(['w/c', 'week_ending', 'Channel ID', 'Channel title', 'source_path']).agg({'Views': 'sum'}).reset_index()
-media_action_df['Channel Group'] = 'BBC Media Action'
-
-channel_ids = {'Aksi Kita Indonesia': 'aksikitaindo', }
-media_action_df['Channel ID'] = media_action_df['Channel ID'].replace(channel_ids)
-
-media_action_df['Unique viewers'] = media_action_df['Views'] / gam_info['overlap_viewer_uniqueViever']
-
-
-# In[38]:
-
-
-gam_info['overlap_viewer_uniqueViever']
+    def get_week_dates(date):
+        if date.weekday() != 6:  # Check if the date is not a Sunday
+            raise ValueError("The input date must be a Sunday.")
+        
+        from_date = date + pd.Timedelta(days=1)  # Monday after the given Sunday
+        to_date = from_date + pd.Timedelta(days=6)  # Sunday after the Monday
+        return from_date, to_date
+    
+    media_action_df['Date'] = pd.to_datetime(media_action_df['Date'])
+    
+    # Apply the function to get FromDate and ToDate
+    media_action_df['w/c'], media_action_df['week_ending'] = zip(*media_action_df['Date'].apply(get_week_dates))
+    
+    # Group by Geography, FromDate, ToDate, and filename to sum Views
+    media_action_df = media_action_df.groupby(['w/c', 'week_ending', 'Channel ID', 'Channel title', 'source_path']).agg({'Views': 'sum'}).reset_index()
+    media_action_df['Channel Group'] = 'BBC Media Action'
+    
+    channel_ids = {'Aksi Kita Indonesia': 'aksikitaindo', }
+    media_action_df['Channel ID'] = media_action_df['Channel ID'].replace(channel_ids)
+    
+    media_action_df['Unique viewers'] = media_action_df['Views'] / gam_info['overlap_viewer_uniqueViever']
+else:
+    media_action_df = pd.DataFrame()
 
 
 # ### combine CMS & non CMS
 
-# In[39]:
+# In[9]:
 
 
 full_uv_df = pd.concat([combined_df, media_action_df])
 print(full_uv_df.shape) #(7841, 14)
 
 # add service & service code info 
-youtube_uv = full_uv_df.merge(socialmedia_accounts[['Channel ID', 'Channel Name',  'Service', 'ServiceID']], 
+youtube_uv = full_uv_df.merge(socialmedia_accounts[['Channel ID', 'Channel Name',  
+                                                    'ServiceID', 'ServiceID']],
                               on='Channel ID' , how='left')
 
 youtube_uv['Unique viewers'] = youtube_uv['Unique viewers'].fillna(0)
@@ -264,20 +265,20 @@ youtube_uv.drop(columns=['week_ending'], inplace=True)
 
 # ## Test 
 
-# In[40]:
+# In[10]:
 
 
 ################################### Testing ################################### 
 test_step = 'combine CMS & non CMS'
 # test accounts
-test_functions.test_filter_elements_returned(youtube_uv, channel_ids, 'Channel ID', "1_YT_2", test_step)
+test_functions.test_filter_elements_returned(youtube_uv, channel_ids, 'Channel ID', f"7_{platformID}_engagements", test_step)
 # test weeks 
-test_functions.test_weeks_presence_per_account('w/c', 'Channel ID', youtube_uv, week_tester, "1_YT_3", test_step)
+test_functions.test_weeks_presence_per_account('w/c', 'Channel ID', youtube_uv, week_tester, f"8_{platformID}_engagements", test_step)
 # test duplicates
 cols= ['Channel ID', 'Channel title', 'Channel Group', 'w/c',]
-test_functions.test_duplicates(youtube_uv, cols, '1_YT_4', test_step)
+test_functions.test_duplicates(youtube_uv, cols, f"9_{platformID}_engagements", test_step)
 
-test_functions.test_merge_row_count(youtube_uv, full_uv_df, '1_YT_5', test_step)
+test_functions.test_merge_row_count(youtube_uv, full_uv_df, f"10_{platformID}_engagements", test_step)
 
 ################################### Testing ################################### 
 
@@ -286,18 +287,12 @@ youtube_uv.sample()
 
 # ## Storing
 
-# In[42]:
+# In[11]:
 
 
 cols = ['Channel ID', 'Channel Name', 'ServiceID', 'Channel Group',
         'Channel title', 'Unique viewers', 'w/c']
 youtube_uv = youtube_uv[cols]
-
-# clean cols 
-youtube_uv['ServiceID'] = youtube_uv['ServiceID'].str.strip().fillna('')
-youtube_uv['Channel ID'] = youtube_uv['Channel ID'].str.strip().fillna('')
-youtube_uv['Unique viewers'] = youtube_uv['Unique viewers'].fillna(0)
-youtube_uv['w/c'] = pd.to_datetime(youtube_uv['w/c'])
 
 youtube_uv.to_csv(f"../data/processed/{platformID}/_{gam_info['file_timeinfo']}_uniqueViewer_withAds.csv", 
                          index=None)
@@ -305,59 +300,49 @@ youtube_uv.to_csv(f"../data/processed/{platformID}/_{gam_info['file_timeinfo']}_
 
 # ## remove Advertising 
 
-# In[43]:
+# In[12]:
 
 
 # read in ad dataset
 cols = ['Channel', 'Week', '% reach to be removed']
-youtube_ads = pd.read_excel(f"../data/raw/{platformID}/YouTube_advertising.xlsx", usecols=cols)
-youtube_ads.rename(columns={'Channel': 'Channel ID', 
-                            'Week': 'w/c'}, inplace=True)
-
-# merge datasetsa
-youtube_uv_withAds = youtube_uv.merge(youtube_ads, on=['Channel ID', 'w/c'], how='left')
-youtube_uv_withAds['% reach to be removed'] = youtube_uv_withAds['% reach to be removed'].fillna(0)
-
-# subset youtube_uv dataset 
-youtube_uv_organic = youtube_uv_withAds.copy()
-youtube_uv_organic['Unique viewers'] -= youtube_uv_organic['Unique viewers'].mul(youtube_uv_organic['% reach to be removed'])
-youtube_uv_organic.drop(columns=['% reach to be removed'], inplace=True)
-youtube_uv_organic.head()
-
-
-# ## Testing 
-
-# In[44]:
-
-
-# Get a rough estimate of channel average UV and sort descending by average UV
-channel_avg_uv = youtube_uv_organic.groupby(['Channel ID', 'ServiceID'])['Unique viewers'].mean()\
-                            .reset_index(name='average_UV')\
-                            .sort_values(by='average_UV', ascending=False)
-
-## TODO make heatmap
-
-
-# In[45]:
-
-
-# Calculate the sum of unique viewers for each YT Service Code and Week Number
-sum_uv = youtube_uv_organic.groupby(['ServiceID', 'w/c'])['Unique viewers'].sum()\
-                               .reset_index(name='sum_UV')
-
-# Calculate the average of unique viewers for each YT Service Code
-avg_uv = youtube_uv_organic.groupby(['ServiceID'])['Unique viewers'].mean()\
-                    .reset_index(name='average_UV')\
-                    .sort_values(by='average_UV', ascending=False)
-
-## TODO make heatmap
-
-
-# # storing dataset
-
-# In[46]:
-
-
-youtube_uv_organic.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer.csv", 
+try:
+    youtube_ads = pd.read_excel(f"../data/raw/{platformID}/YouTube_advertising.xlsx", usecols=cols)
+    youtube_ads.rename(columns={'Channel': 'Channel ID', 
+                                'Week': 'w/c'}, inplace=True)
+    
+    # merge datasetsa
+    youtube_uv_withAds = youtube_uv.merge(youtube_ads, on=['Channel ID', 'w/c'], how='left')
+    youtube_uv_withAds['% reach to be removed'] = youtube_uv_withAds['% reach to be removed'].fillna(0)
+    
+    # subset youtube_uv dataset 
+    youtube_uv_organic = youtube_uv_withAds.copy()
+    youtube_uv_organic['Unique viewers'] -= youtube_uv_organic['Unique viewers'].mul(youtube_uv_organic['% reach to be removed'])
+    youtube_uv_organic.drop(columns=['% reach to be removed'], inplace=True)
+    
+    # Get a rough estimate of channel average UV and sort descending by average UV
+    channel_avg_uv = youtube_uv_organic.groupby(['Channel ID', 'ServiceID'])['Unique viewers'].mean()\
+                                .reset_index(name='average_UV')\
+                                .sort_values(by='average_UV', ascending=False)
+    
+    # Calculate the sum of unique viewers for each YT Service Code and Week Number
+    sum_uv = youtube_uv_organic.groupby(['ServiceID', 'w/c'])['Unique viewers'].sum()\
+                                   .reset_index(name='sum_UV')
+    
+    # Calculate the average of unique viewers for each YT Service Code
+    avg_uv = youtube_uv_organic.groupby(['ServiceID'])['Unique viewers'].mean()\
+                        .reset_index(name='average_UV')\
+                        .sort_values(by='average_UV', ascending=False)
+    
+    youtube_uv_organic.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer.csv", 
                          index=None)
+except:
+    print("no advertising data for Youtube!")
+    youtube_uv.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer.csv", 
+                         index=None)
+
+
+# In[ ]:
+
+
+
 

@@ -50,9 +50,9 @@ import functions
 
 # country
 pop_size_col = gam_info['population_column']
-cols = ['PlaceID', pop_size_col]
+country_cols = ['PlaceID', pop_size_col]
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
-                              keep_default_na=False)[cols]
+                              keep_default_na=False)[country_cols]
 country_codes[gam_info['population_column']] = pd.to_numeric(
     country_codes[gam_info['population_column']], errors='coerce')
 # week 
@@ -73,7 +73,17 @@ formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_id
 
 # overlaps 
 overlaps = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='overlap')
-overlaps.head()
+
+
+### RUN TESTS
+test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_4_0", f"{platformID}_4_1", f"{platformID}_4_2"], 
+                                 test_step="lookup files - ensuring country codes is correct")
+
+test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_4_3", f"{platformID}_4_4", f"{platformID}_4_5"], 
+                                 test_step = "lookup files - ensuring week tester is correct")
+
+test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_4_6", f"{platformID}_4_7", f"{platformID}_4_8"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
 
 
 # ## import data 
@@ -81,7 +91,7 @@ overlaps.head()
 # In[5]:
 
 
-full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer_country.csv")
+full_df_raw = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer_country.csv")
 # rename / replace to the appropriate columns 
 '''
 - PlatformID
@@ -90,14 +100,12 @@ full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo'
 - Week Number
 - Reach
 '''
-print(full_df.shape)
+print(full_df_raw.shape)
 
-full_df = full_df.merge(country_codes, on='PlaceID', 
+full_df = full_df_raw.merge(country_codes, on='PlaceID', 
                         how='left', indicator=True)
 print(full_df._merge.value_counts())
 full_df.drop(columns=['_merge'], inplace=True)
-
-full_df = functions.filter_channels_by_weeks(full_df)
 
 
 # # calculate 
@@ -158,6 +166,8 @@ for bu in gam_info['business_units'].keys():
         #calculate sainsbury
         channel_uv_by_country = functions.sainsbury_formula(channel_uv_by_country, pop_size_col, 
                                       channel_ids, 'uv_by_country')
+
+        channel_uv_by_country = channel_uv_by_country.drop(columns=channel_ids)
         
         cols_left =  ['w/c', 'PlaceID', 'uv_by_country']
         cols_right = ['w/c', 'PlaceID', 'ServiceID', 'uv_by_country']
@@ -184,27 +194,22 @@ for bu in gam_info['business_units'].keys():
 # In[7]:
 
 
-grouped_service = 'AXE'
-data[grouped_service] = {'weekly': 'tbd'}
-    
+data['AXE'] = {'weekly': pd.DataFrame()}
+temp = data['WSL']['weekly']
+data['AXE']['weekly'] = functions.calculate_weekly_Services(temp, 'AXE', platformID, pop_size_col,
+                                                               gam_info, 'sum') 
 
-
-# ### weekly 
-
-# In[8]:
-
-
-wsl_weekly = data['WSL']['weekly']
-# ask minnie - this must be wrong?
-wsl_weekly = wsl_weekly[~wsl_weekly['ServiceID'].isin(['SER', 'SIN'])]
-
-data[grouped_service]['weekly'] = functions.calculate_weekly_sumServices(wsl_weekly, grouped_service, platform, gam_info)
+# TODO add explainer to make clear how a new service is created (BNI BNO breakout in GNL)
+data['GNL'] = {'weekly': pd.DataFrame()}
+temp = data['GNL_']['weekly']
+data['GNL']['weekly'] = functions.calculate_weekly_Services(temp, 'GNL', platformID, pop_size_col,
+                                                  gam_info) 
 
 
 # ## AX2, ANW, ANY, TOT, ALL, ENG, EN2 ENW
 # 
 
-# In[9]:
+# In[8]:
 
 
 path = f"../data/singlePlatform/{platformID}/"
@@ -221,4 +226,35 @@ stages = [
     ]
 data = functions.calculate_aggregated_services(data, stages, platformID, gam_info, path, overlaps, 
                                                 country_codes, pop_size_col)
+
+
+# In[10]:
+
+
+# Combine all 'weekly' DataFrames
+cols = ['PlaceID', 'ServiceID', 'w/c', 'Reach', ]
+combined_weekly = pd.concat(
+    [v['weekly'] for v in data.values() if 'weekly' in v],
+    ignore_index=True
+)[cols]
+
+print(combined_weekly.shape)
+combined_weekly.sample()
+combined_weekly['PlatformID'] = platformID
+# SERVICE hierarchy issues
+test_step = "calculated high-level services"
+service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_9", 
+                                                               'Service', 
+                                                               gam_info, 
+                                                               combined_weekly, 
+                                                               ['w/c', 'PlaceID'],
+                                                               metric_col='Reach',
+                                                               test_step= test_step, 
+                                                                round_metric=True)
+
+
+# In[ ]:
+
+
+
 

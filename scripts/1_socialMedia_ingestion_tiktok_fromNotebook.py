@@ -18,7 +18,8 @@ pd.set_option('display.float_format', '{:.00f}'.format)
 import os 
 import numpy as np
 import ast
-from sympy import symbols, solve, lambdify
+
+import time
 
 
 # In[2]:
@@ -50,9 +51,9 @@ import test_functions
 platformID = 'TTK'
 
 # country
-cols = ['PlaceID',	'TikTok Codes']
+country_cols = ['PlaceID',	'TikTok Codes']
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", 
-                              sheet_name='CountryID', usecols=cols, keep_default_na=False )
+                              sheet_name='CountryID', usecols=country_cols, keep_default_na=False )
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
@@ -68,11 +69,19 @@ socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=d
                                      sheet_name='Social Media Accounts new', keep_default_na=False)
 
 socialmedia_accounts = socialmedia_accounts[(socialmedia_accounts['PlatformID'] == platformID)
-                                            & 
-                                            (socialmedia_accounts['Status'] == 'active')]
+                                            & (socialmedia_accounts['Status'] == 'active')]
 socialmedia_accounts = socialmedia_accounts.rename(columns={'Excluding UK': 'Channel Group'})
 
-socialmedia_accounts.sample()
+
+### RUN TESTS
+test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_1_0", f"{platformID}_1_1", f"{platformID}_1_2"], 
+                                 test_step="lookup files - ensuring country codes is correct")
+
+test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_1_3", f"{platformID}_1_4", f"{platformID}_1_5"], 
+                                 test_step = "lookup files - ensuring week tester is correct")
+
+test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_1_6", f"{platformID}_1_7", f"{platformID}_1_8"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
 
 
 # # ingest data
@@ -83,7 +92,7 @@ socialmedia_accounts.sample()
 post_url = "https://api.emplifi.io/3/tiktok/profile/posts"
                
 # create secret token for API authentication
-secret_token = f"{emplifi_key['BAU']['access_token']}:{emplifi_key['BAU']['secret']}"
+secret_token = f"{emplifi_key['access_token']}:{emplifi_key['secret']}"
 encoded_secret_token = base64.b64encode(secret_token.encode('utf-8')).decode('utf-8')
 
 # authentication using secret token
@@ -91,11 +100,6 @@ headers_bau = {
     "Authorization": f"Basic {encoded_secret_token}"
 }
 
-# create secret token for API authentication
-secret_token = f"{emplifi_key['Studios']['access_token']}:{emplifi_key['Studios']['secret']}"
-encoded_secret_token = base64.b64encode(secret_token.encode('utf-8')).decode('utf-8')
-
-headers_studios = {"Authorization": f"Basic {encoded_secret_token}"}
 
 
 # In[5]:
@@ -187,47 +191,69 @@ def get_post_level_insights(start_date, end_date, profile_id, headers):
     return df
 
 
-# In[7]:
+# In[ ]:
 
 
 # Directory to store weekly data
 storage_dir = f"../data/raw/{platformID}/post_level/"
 os.makedirs(storage_dir, exist_ok=True)
 
-channel_access_dict = socialmedia_accounts.set_index('Channel ID')['Access'].to_dict()
 
-for profile_id, access in tqdm(channel_access_dict.items()):
-    # Sort weeks from newest to oldest
-    for week in week_tester['w/c'].sort_values(ascending=False):
-        
+MAX_CALLS = 500
+PERIOD = 3600  # seconds (1 hour)
+
+start_time = time.time()
+request_count = 0
+
+# Sort weeks from newest to oldest
+for week in week_tester['w/c'].sort_values(ascending=False):
+    
+    for profile_id in tqdm(socialmedia_accounts['Channel ID'].tolist()):
+        # Check if we hit the limit
+        if request_count >= MAX_CALLS:
+            elapsed = time.time() - start_time
+            if elapsed < PERIOD:
+                wait = PERIOD - elapsed
+                print(f"⏳ Hit {MAX_CALLS} requests. Waiting {wait:.1f}s until hour resets...")
+                time.sleep(wait)
+            # Reset for next hour
+            start_time = time.time()
+            request_count = 0
+
         if week > datetime.now():
-            break
+            continue
         end_date = week + pd.DateOffset(days=(6 - week.weekday()))
         week_str = week.strftime("%Y-%m-%d")
-        filename = f"{storage_dir}/{gam_info['file_timeinfo']}_{platformID}_{profile_id}_{week_str}.csv"
+        filename = f"{gam_info['file_timeinfo']}_{platformID}_{profile_id}_{week_str}.csv"
 
         if os.path.exists(filename):
             continue
         else:
             print(f"🔄 Fetching data for {profile_id} on week {week_str}...")
-            if access == 'BAU':
-                df = get_post_level_insights(week_str, end_date.strftime("%Y-%m-%d"), 
-                                             profile_id, headers_bau)
-            elif access == 'Studios':
-                print("using Studios access")
-                df = get_post_level_insights(week_str, end_date.strftime("%Y-%m-%d"), 
-                                             profile_id, headers_studios)
-                
+            df = get_post_level_insights(week_str, end_date.strftime("%Y-%m-%d"), 
+                                         profile_id, headers_bau)
+            cols_that_must_not_be_empty = ['author', 'insights_viewers_by_country',
+                                           'insights_avg_time_watched', 'duration', 
+                                           'insights_reach', 'insights_completion_rate']    
             if df.empty:
                 print(f"⚠️ No data returned for {profile_id} on week {week_str}. Skipping save.")
-                break
+                continue
+            
+            elif df[cols_that_must_not_be_empty].isna().all(axis=0).any():
+                issues_dir = f"../data/raw/{platformID}/post_level/issues"
+                os.makedirs(issues_dir, exist_ok=True)
+                df.to_csv(os.path.join(issues_dir, filename), index=False)
+                print(f"⚠️ Partial data returned for {profile_id} on week {week_str}. Saved in issue folder: {issues_dir}")
+                continue
+                
             else:
                 df["platformID"] = platformID
                 df["profile_id"] = profile_id
                 df["w/c"] = week
         
-            df.to_csv(filename, index=False)
+            df.to_csv(f"{storage_dir}/{filename}", index=False)
             print(f"✅ Saved to {filename}")
+            
 
 
 # In[ ]:

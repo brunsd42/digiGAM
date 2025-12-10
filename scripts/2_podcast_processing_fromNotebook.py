@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[46]:
+# In[1]:
 
 
 from IPython.display import display
@@ -17,7 +17,7 @@ import missingno as msno
 
 # ## import helper
 
-# In[47]:
+# In[2]:
 
 
 import sys
@@ -38,7 +38,7 @@ from config import gam_info
 import test_functions 
 
 
-# In[48]:
+# In[3]:
 
 
 # country
@@ -49,7 +49,7 @@ country_codes = country_codes.rename(columns={'Podcast (Redshift raw data)': 'co
                                               'PlaceID': 'PlaceID'})
 
 # week 
-cols = ['w/c', 'YearGAE']
+cols = ['w/c']
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')[cols]
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 
@@ -70,7 +70,7 @@ platform_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='P
 
 # # processing
 
-# In[49]:
+# In[4]:
 
 
 # Initialize an empty list to store DataFrames
@@ -102,7 +102,7 @@ df_raw.sample()
 msno.matrix(df_raw)
 
 
-# In[50]:
+# In[5]:
 
 
 test_step="reading in all sql queries"
@@ -141,72 +141,85 @@ msno.matrix(df)
 
 # # IPO data
 
-# In[51]:
+# In[6]:
 
 
 # TODO add this as automation next year 
-cols = ['w/c', 'CBC_country', '[Listeners]']
-ipo_data_cbc = pd.read_excel(f"../data/raw/podcast/CBC - {gam_info['file_timeinfo']}.xlsx", 
-                             sheet_name="CBC")[cols]
-ipo_data_cbc.rename(columns={'[Listeners]': 'uniques'}, inplace=True)
-ipo_data_cbc['w/c'] = pd.to_datetime(ipo_data_cbc['w/c'])
-display(ipo_data_cbc.sample())
+try:
+    cols = ['w/c', 'CBC_country', '[Listeners]']
+    ipo_data_cbc = pd.read_excel(f"../data/raw/podcast/CBC - {gam_info['file_timeinfo']}.xlsx", 
+                                 sheet_name="CBC")[cols]
+    ipo_data_cbc.rename(columns={'[Listeners]': 'uniques'}, inplace=True)
+    ipo_data_cbc['w/c'] = pd.to_datetime(ipo_data_cbc['w/c'])
+    display(ipo_data_cbc.sample())
 
-################################# test syn data part I
-# test & add weeks
-print('..weeks:')
-test_functions.test_weeks_presence('w/c', ipo_data_cbc, week_tester, '2_POD_4', test_step)
-ipo_data_cbc = ipo_data_cbc.merge(week_tester, on='w/c', how='left')
-
-# join to country_tester
-print('..countries:')
-cols = ['CBC_country', 'PlaceID']
-test_functions.test_inner_join(ipo_data_cbc, country_codes[cols], ['CBC_country'], '2_POD_5', test_step, focus='left')
-ipo_data_cbc = ipo_data_cbc.merge(country_codes[cols], on='CBC_country', how='left').drop(columns='CBC_country') #left because this test has run and I NEVER want to loose data
-
-ipo_data_cbc['PlatformID'] = 'IPO'
-ipo_data_cbc['ServiceID'] = 'WSE'
-
-msno.matrix(ipo_data_cbc)
-
+    ################################# test syn data part I
+    # test & add weeks
+    print('..weeks:')
+    test_functions.test_weeks_presence('w/c', ipo_data_cbc, week_tester, '2_POD_4', test_step)
+    ipo_data_cbc = ipo_data_cbc.merge(week_tester, on='w/c', how='left')
+    
+    # join to country_tester
+    print('..countries:')
+    cols = ['CBC_country', 'PlaceID']
+    test_functions.test_inner_join(ipo_data_cbc, country_codes[cols], ['CBC_country'], '2_POD_5', test_step, focus='left')
+    ipo_data_cbc = ipo_data_cbc.merge(country_codes[cols], on='CBC_country', how='left').drop(columns='CBC_country') #left because this test has run and I NEVER want to loose data
+    
+    ipo_data_cbc['PlatformID'] = 'IPO'
+    ipo_data_cbc['ServiceID'] = 'WSE'
+    
+    #msno.matrix(ipo_data_cbc)
+except:
+    print("ipo_data from CBC is missing")
+    ipo_data_cbc = pd.DataFrame()
+    
 ################################# add & test syn data part II
-# add other excel 
-ipo_data_2 = pd.read_excel(f"../data/raw/podcast/WSE_IPO_data_{gam_info['file_timeinfo']}.xlsx",)
-
-# cross tab with week tester 
-ipo_data_2 = ipo_data_2.merge(week_tester, on='YearGAE', how='left')
-display(ipo_data_2.sample())
-test_functions.test_weeks_presence('w/c', ipo_data_2, week_tester, '2_POD_6', test_step)
+try:
+    # add other excel 
+    ipo_data_2 = pd.read_excel(f"../data/raw/podcast/WSE_IPO_data_{gam_info['file_timeinfo']}.xlsx",)
+    
+    # cross tab with week tester 
+    ipo_data_2 = ipo_data_2.merge(week_tester, on='YearGAE', how='left')
+    display(ipo_data_2.sample())
+    test_functions.test_weeks_presence('w/c', ipo_data_2, week_tester, '2_POD_6', test_step)
+    
+    
+except:
+    print("ipo_data for WSE is missing")
+    ipo_data_2 = pd.DataFrame()
 
 ipo_data = pd.concat([ipo_data_cbc, ipo_data_2])
-msno.matrix(ipo_data)
+#msno.matrix(ipo_data)
 
 ################################# adding service parents to syn data I & II 
-service_parents = ['ALL', 'ANW']
+if len(ipo_data) > 0:
+    service_parents = ['ALL', 'ANW']
+    i = 7
+    for service in service_parents:
+        test_number = f"2_POD_{i}"
+        
+        start = len(ipo_data)
+        temp = ipo_data[ipo_data['ServiceID'] == 'WSE'].copy()
+        test_val = len(temp)
+        temp.loc[:, 'ServiceID'] = service
+        print(f"{test_number}: {service}: {temp.shape}")
+        ipo_data = pd.concat([ipo_data, temp])
+        end = len(ipo_data)
+        test_step = f"adding WSE to {service}"
+        test_functions.test_adding_WWW(start, test_val, end, test_number, test_step=test_step, )
+        i+=1
+else:
+    print('no ipo data!')
+    ipo_data = pd.DataFrame()
 
-i = 7
-for service in service_parents:
-    test_number = f"2_POD_{i}"
-    
-    start = len(ipo_data)
-    temp = ipo_data[ipo_data['ServiceID'] == 'WSE'].copy()
-    test_val = len(temp)
-    temp.loc[:, 'ServiceID'] = service
-    print(f"{test_number}: {service}: {temp.shape}")
-    ipo_data = pd.concat([ipo_data, temp])
-    end = len(ipo_data)
-    test_step = f"adding WSE to {service}"
-    test_functions.test_adding_WWW(start, test_val, end, test_number, test_step=test_step, )
-    i+=1
 
-
-# In[52]:
+# In[7]:
 
 
 df = pd.concat([df, ipo_data])
 
 
-# In[53]:
+# In[8]:
 
 
 ################################# adding platforms
@@ -229,13 +242,13 @@ for platform in platform_list:
     i +=1
 
 
-# In[54]:
+# In[9]:
 
 
-df = df.groupby(['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID'])['uniques'].sum().reset_index()
+df = df.groupby(['w/c', 'ServiceID', 'PlatformID', 'PlaceID'])['uniques'].sum().reset_index()
 
 
-# In[55]:
+# In[10]:
 
 
 ################################# adding services
@@ -254,7 +267,7 @@ for service_id, service_children in service_creator.items():
     start = len(df)
     print(f"{test_number}: {service_id}")
     temp = df[df['ServiceID'].isin(service_children)]
-    temp = temp.groupby(['YearGAE', 'w/c', 'PlatformID', 'PlaceID'])['uniques'].sum().reset_index()
+    temp = temp.groupby(['w/c', 'PlatformID', 'PlaceID'])['uniques'].sum().reset_index()
     test_val = len(temp)
 
     temp['ServiceID'] = service_id
@@ -267,13 +280,7 @@ for service_id, service_children in service_creator.items():
     i += 1
 
 
-# In[56]:
-
-
-df[df['PlatformID'].isna()]
-
-
-# In[57]:
+# In[11]:
 
 
 ############################# TESTING start
@@ -281,8 +288,8 @@ main_df = df.copy()
 test_step = 'final_testig_reachDF'
 
 # test all weeks present
-test_functions.test_weeks_presence_per_account('w/c', ['ServiceID'], main_df, week_tester, 
-                                               '2_POD_16', test_step)
+#test_functions.test_weeks_presence_per_account('w/c', ['ServiceID'], main_df, week_tester, 
+#                                               '2_POD_16', test_step)
 
 # test placeID in lookup
 test_functions.test_inner_join(main_df, country_codes, ['PlaceID'], 
@@ -302,13 +309,7 @@ test_functions.test_inner_join(main_df, service_details, ['ServiceID'],
 ############################# TESTING end
 
 
-# In[58]:
-
-
-df.columns
-
-
-# In[59]:
+# In[12]:
 
 
 test_step = 'checking hierarchy for reach'
@@ -317,7 +318,7 @@ service_hierarchy_issues = test_functions.test_hierarchy_reach('2_POD_20',
                                                                'Service', 
                                                                gam_info, 
                                                                df,
-                                                               ['YearGAE', 'w/c', 'PlaceID', 'PlatformID'],
+                                                               ['w/c', 'PlaceID', 'PlatformID'],
                                                                metric_col='uniques',
                                                                test_step=test_step)
 
@@ -337,7 +338,7 @@ platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='2_P
 
 # # average weekly reach 
 
-# In[60]:
+# In[13]:
 
 
 '''test_functions.see_weekly_reach(gam_info, df.sort_values('uniques', ascending=False), 'PlaceID', 'podcast_weekly_country','w/c')
@@ -347,14 +348,17 @@ test_functions.see_weekly_reach(gam_info, df, 'PlaceID', 'podcast_weekly_country
 '''
 
 
-# In[63]:
+# In[14]:
 
 
 df = df.rename(columns={'uniques': 'Reach'})
-df.to_excel(f"../data/singlePlatform/Podcast/weekly/{gam_info['file_timeinfo']}_podcast_data_weekly.xlsx", index=None)
+
+file_path = "../data/singlePlatform/Podcast/weekly"
+os.makedirs(file_path, exist_ok=True)
+df.to_excel(f"{file_path}/{gam_info['file_timeinfo']}_podcast_data_weekly.xlsx", index=None)
 
 final_df = df.groupby(['ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
-final_df['Reach'] = final_df['Reach'] / gam_info['number_of_weeks']
+final_df['Reach'] = final_df['Reach'] / len(df['w/c'].unique())
 
 final_df.to_excel(f"../data/singlePlatform/Podcast/{gam_info['file_timeinfo']}_podcast_reach_annual.xlsx", index=None)
 

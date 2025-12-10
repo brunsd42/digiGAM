@@ -66,22 +66,30 @@ country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Co
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-week_tester['week_ending'] = pd.to_datetime(week_tester['week_ending'])
 
 # social media accounts
 socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", 
                                      sheet_name='Social Media Accounts new')
 
 socialmedia_accounts = socialmedia_accounts[(socialmedia_accounts['PlatformID'] == platformID)
-                                            & 
-                                            (socialmedia_accounts['Status'] == 'active')]
+                                            & (socialmedia_accounts['Status'] == 'active')]
 socialmedia_accounts = socialmedia_accounts.rename(columns={'Excluding UK': 'Channel Group'})
 socialmedia_accounts['Channel ID'] = socialmedia_accounts['Channel ID'].dropna().apply(lambda x: str(int(x)))
 
 
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
-socialmedia_accounts.dtypes
+
+### RUN TESTS
+test_functions.test_lookup_files(country_codes, ['PlaceID'], [f"{platformID}_3_0", f"{platformID}_3_1", f"{platformID}_3_2"], 
+                                 test_step="lookup files - ensuring country codes is correct")
+
+test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_3_3", f"{platformID}_3_4", f"{platformID}_3_5"], 
+                                 test_step = "lookup files - ensuring week tester is correct")
+
+test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_3_6", f"{platformID}_3_7", f"{platformID}_3_8"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
+
 
 
 # # Unique Viewers
@@ -101,11 +109,11 @@ facebook_engagements_reach['Channel ID'] = facebook_engagements_reach['Channel I
 
 country_raw = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_COUNTRY.csv")
 country_raw['w/c'] = pd.to_datetime(country_raw['w/c'])
-country_raw['fb_page_id'] = country_raw['fb_page_id'].apply(lambda x: str(int(x)))
+country_raw['Channel ID'] = country_raw['Channel ID'].apply(lambda x: str(int(x)))
 
 
-cols = ['fb_page_id', 'fb_page_name', 'w/c', 'PlaceID', 'country_%']
-country_df = country_raw[cols].rename(columns={"fb_page_id": "Channel ID"})
+cols = ['Channel ID', 'Channel Name', 'w/c', 'PlaceID', 'country_%']
+country_df = country_raw[cols]
 country_df.head()
 
 
@@ -113,7 +121,7 @@ country_df.head()
 
 
 # get 
-country_lastYear = pd.read_excel(f"../data/interim/2024_Facebook Engagements & Country.xlsx", 
+country_lastYear = pd.read_excel(f"../data/stale/2024_FBE_Engagements_Country.xlsx", 
                                  sheet_name='Weekly FB Country USE')
 country_lastYear = country_lastYear.rename(columns={
     'FB Page ID': 'Channel ID', 
@@ -147,22 +155,21 @@ reach_df = pd.concat([reach_df_inner, reach_df_avg])
 # In[9]:
 
 
-metric_col = ['country_%', 'Engaged Reach']
+metric_col = ['country_%', 'engaged_reach']
 for col in metric_col:
     reach_df[col] = reach_df[col].fillna(0)
     
-reach_df['uv_by_country'] = reach_df['country_%'] * reach_df['Engaged Reach']
+reach_df['uv_by_country'] = reach_df['country_%'] * reach_df['engaged_reach']
+# TODO investigate why there should be duplicates here
 reach_df = reach_df.drop_duplicates()
 
-cols = ['w/c', 'PlaceID', 'ServiceID', 'Channel ID', 'uv_by_country']
+print(reach_df.shape)
+reach_df = reach_df.dropna(subset='uv_by_country')
+print(reach_df.shape)
+
+cols = ['ServiceID', 'Channel ID', 'w/c', 'PlaceID', 'uv_by_country']
 reach_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv", 
                      index=None)
-
-
-# In[ ]:
-
-
-
 
 
 # In[ ]:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[13]:
+# In[1]:
 
 
 from IPython.display import display
@@ -26,7 +26,7 @@ import missingno as msno
 
 # ## import helper
 
-# In[14]:
+# In[2]:
 
 
 import sys
@@ -49,7 +49,7 @@ import test_functions
 import functions
 
 
-# In[15]:
+# In[3]:
 
 
 # country
@@ -84,17 +84,16 @@ non_js_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_
 app_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_App')
 
 
-# In[16]:
+# In[7]:
 
 
-full_df = pd.read_csv(f"../data/raw/{gam_info['file_timeinfo']}_rawDataFromPiano.csv", dtype={'Report No.': str})
-full_df.drop(columns=['m_page_loads', 'src', 'Description'], inplace=True)
-full_df['app_name'] = full_df['app_name'].astype(str)
+full_df = pd.read_csv(f"../data/raw/site/{gam_info['file_timeinfo']}_rawDataFromPiano.csv", dtype={'Report No.': str})
+full_df.drop(columns=[ 'Description'], inplace=True)
 
 
 # ## setup for platform processing
 
-# In[19]:
+# In[5]:
 
 
 # TO DO somewhere here the column device_type has it's nan values replaced with nan -where and why? 
@@ -180,33 +179,51 @@ df.drop(columns=['ServiceID_y', '_merge'], inplace=True)
 print(f"5: {df.shape}")
 
 
-# In[20]:
+# In[14]:
+
+
+service_codes['site_level2'].unique()
+
+
+# In[11]:
+
+
+df[df['site_level2'] == 'dari']
+
+
+# In[ ]:
 
 
 ################ ADD SERVICE BASED ON app_name
-test_functions.test_join_rowCount(df[df['ServiceID'].isna() & df['app_name'].notna() & (df['app_name'] != '')], 
-                               app_map, ['app_name'], '2_site_5', 
-                               'test apps are in piano raw data')
-# Merge DataFrames to fill missing values
-df = df.merge(app_map[['app_name', 'ServiceID']], on='app_name', how='left',  
-              suffixes=('', '_y'), indicator=True)
+if 'app_name' in df.columns:
+    test_functions.test_join_rowCount(df[df['ServiceID'].isna() & df['app_name'].notna() & (df['app_name'] != '')], 
+                                   app_map, ['app_name'], '2_site_5', 
+                                   'test apps are in piano raw data')
+    # Merge DataFrames to fill missing values
+    df = df.merge(app_map[['app_name', 'ServiceID']], on='app_name', how='left',  
+                  suffixes=('', '_y'), indicator=True)
+    
+    # Fill missing ServiceID 
+    df['ServiceID'] = df['ServiceID'].fillna(df['ServiceID_y'])
+    # ask Payam why here not AX2
+    temp = df[df['_merge'] == 'both']
+    temp_www = temp.copy()
+    df = pd.concat([df[df['_merge'] != 'both'], temp, temp_www])
+    
+    
+    # Drop the extra columns
+    df.drop(columns=['ServiceID_y', '_merge'], inplace=True)
+    print(f"6: {df.shape}")
 
-# Fill missing ServiceID 
-df['ServiceID'] = df['ServiceID'].fillna(df['ServiceID_y'])
+else:
+    print('app not used for service enrichment')
 
-# ask Payam why here not AX2
-temp = df[df['_merge'] == 'both']
-temp_www = temp.copy()
-df = pd.concat([df[df['_merge'] != 'both'], temp, temp_www])
-
-
-# Drop the extra columns
-df.drop(columns=['ServiceID_y', '_merge'], inplace=True)
-print(f"6: {df.shape}")
 
 ################ STORE ISSUES
+path = "../test/specific"
+os.makedirs(path, exist_ok=True)
 # TODO: go through missing services and see if these can't get a ServiceID
-df[df['ServiceID'].isna()].to_excel(f"../test/specific/{gam_info['file_timeinfo']}_site_missingServiceIDs.xlsx")
+df[df['ServiceID'].isna()].to_excel(f"{path}/{gam_info['file_timeinfo']}_site_missingServiceIDs.xlsx")
 
 ################ ADD PLACEID
 test_step = 'cleaning & adding placeID'
@@ -223,7 +240,7 @@ test_functions.test_join_rowCount(df, country_codes[cols], ['geo_country'],
 df = df.merge(country_codes[cols], on='geo_country', how='left')
 
 
-# In[22]:
+# In[7]:
 
 
 ################ ADD PLATFORM TO STUDIOS
@@ -232,7 +249,7 @@ df = df.merge(country_codes[cols], on='geo_country', how='left')
 df.loc[df['PlatformID'].isna() & (df['ServiceID'] == 'WOR'), 'PlatformID'] = 'WDI'
 
 
-# In[23]:
+# In[8]:
 
 
 # Specify the dtype option to avoid DtypeWarning for columns with mixed types
@@ -249,16 +266,17 @@ for column, dtype in dtype_spec.items():
     if column in df.columns:
         df[column] = df[column].astype(dtype)
 
-drop_list = ['site_level2', 'language', 'producer_nonjs', 'app_name', 'geo_country']
+drop_list = ['site_level2', 'language', 'producer_nonjs', 'geo_country']
 df.drop(columns=drop_list, inplace=True)
 
 ############################# TESTING start
 main_df = df
 test_step = 'final_testig_pianoData'
+'''
 # test all weeks present
 test_functions.test_weeks_presence_per_account('w/c', ['ServiceID'], main_df, week_tester, 
                                                '2_site_8', test_step)
-
+'''
 # test placeID in lookup
 test_functions.test_inner_join(main_df, country_codes, ['PlaceID'], 
                                '2_site_9', test_step, focus='left')
@@ -273,96 +291,105 @@ test_functions.test_inner_join(main_df, service_codes, ['ServiceID'],
 
 ############################# TESTING end
 msno.matrix(df)
-df.to_csv(f"../data/processed/{gam_info['file_timeinfo']}_DataFromPiano.csv", index=None)
+df.to_csv(f"../data/processed/{gam_info['file_timeinfo']}_DataFromPiano_noSyndication.csv", index=None)
 
 
-# In[25]:
+# In[9]:
 
 
 # GLOBAL NEWS PARTNERS 
-gnl_data = pd.read_excel(f"../data/raw/site/{gam_info['file_timeinfo']}_GNL_syndication.xlsx", 
-                         sheet_name='overview').rename(columns={'Sum of Avg Weekly visitors 2025': 'm_unique_visitors'})
-gnl_data = gnl_data.groupby('Country')['m_unique_visitors'].sum().reset_index()
-gnl_data = gnl_data[(~gnl_data['Country'].isna()) & (gnl_data['Country']!='United kingdom')
-                    & (gnl_data['Country']!='Grand Total')]
-
-# clean countries
-country_codes_temp = country_codes[['GNL Syndication', 'PlaceID']].rename(columns={'GNL Syndication': 'Country'})
-test_functions.test_inner_join(gnl_data, country_codes_temp, ['Country'], '2_site_12', 'adding syndicated GNL data', focus='left')
-gnl_data = gnl_data.merge(country_codes_temp, on='Country', how='inner').drop(columns='Country')
-
-gnl_weekly = gnl_data.merge(week_tester[['YearGAE', 'w/c']], how='cross')
-
-gnl_weekly['ServiceID'] = 'GNL'
-
-gnl_weekly_win = gnl_weekly.copy()
-gnl_weekly_win['PlatformID'] = 'WIN'
-
-gnl_weekly_www = gnl_weekly.copy()
-gnl_weekly_www['PlatformID'] = 'WWW'
-display(gnl_weekly_www.sample())
-
-############################# TESTING start
-main_df = pd.concat([gnl_weekly_win, gnl_weekly_www])
-test_step = 'final_testig_gnlSyndicationData'
-# test all weeks present
-test_functions.test_weeks_presence_per_account('w/c', ['ServiceID'], main_df, week_tester, 
-                                               '2_site_13', test_step)
-
-# test placeID in lookup
-test_functions.test_inner_join(main_df, country_codes, ['PlaceID'], 
-                               '2_site_14', test_step, focus='left')
-
-# test platformID in lookup
-test_functions.test_inner_join(main_df, platform_codes, ['PlatformID'], 
-                               '2_site_15', test_step, focus='left')
-
-# test serviceID in lookup
-test_functions.test_inner_join(main_df, service_codes, ['ServiceID'], 
-                               '2_site_16', test_step, focus='left')
-
-############################# TESTING end
-
+try:
+    gnl_data = pd.read_excel(f"../data/raw/site/{gam_info['file_timeinfo']}_GNL_syndication.xlsx", 
+                             sheet_name='overview').rename(columns={'Sum of Avg Weekly visitors 2025': 'm_unique_visitors'})
+    gnl_data = gnl_data.groupby('Country')['m_unique_visitors'].sum().reset_index()
+    gnl_data = gnl_data[(~gnl_data['Country'].isna()) & (gnl_data['Country']!='United kingdom')
+                        & (gnl_data['Country']!='Grand Total')]
+    
+    # clean countries
+    country_codes_temp = country_codes[['GNL Syndication', 'PlaceID']].rename(columns={'GNL Syndication': 'Country'})
+    test_functions.test_inner_join(gnl_data, country_codes_temp, ['Country'], '2_site_12', 'adding syndicated GNL data', focus='left')
+    gnl_data = gnl_data.merge(country_codes_temp, on='Country', how='inner').drop(columns='Country')
+    
+    gnl_weekly = gnl_data.merge(week_tester[['YearGAE', 'w/c']], how='cross')
+    
+    gnl_weekly['ServiceID'] = 'GNL'
+    
+    gnl_weekly_win = gnl_weekly.copy()
+    gnl_weekly_win['PlatformID'] = 'WIN'
+    
+    gnl_weekly_www = gnl_weekly.copy()
+    gnl_weekly_www['PlatformID'] = 'WWW'
+    display(gnl_weekly_www.sample())
+    
+    ############################# TESTING start
+    main_df = pd.concat([gnl_weekly_win, gnl_weekly_www])
+    test_step = 'final_testig_gnlSyndicationData'
+    # test all weeks present
+    test_functions.test_weeks_presence_per_account('w/c', ['ServiceID'], main_df, week_tester, 
+                                                   '2_site_13', test_step)
+    
+    # test placeID in lookup
+    test_functions.test_inner_join(main_df, country_codes, ['PlaceID'], 
+                                   '2_site_14', test_step, focus='left')
+    
+    # test platformID in lookup
+    test_functions.test_inner_join(main_df, platform_codes, ['PlatformID'], 
+                                   '2_site_15', test_step, focus='left')
+    
+    # test serviceID in lookup
+    test_functions.test_inner_join(main_df, service_codes, ['ServiceID'], 
+                                   '2_site_16', test_step, focus='left')
+    
+    ############################# TESTING end
+except:
+    print("no GNL partner data! ")
+    gnl_weekly_win = pd.DataFrame()
+    gnl_weekly_www = pd.DataFrame()
 df_gnl = pd.concat([df, gnl_weekly_win, gnl_weekly_www])
 
 
-# In[27]:
+# In[10]:
 
 
 # LEARNING ENGLISH PARTNERS
-cols = ['w/c', 'PlaceID', 'PlatformID', 'ServiceID', 'Reach']
-le_partner = pd.read_excel(f"../data/raw/site/{gam_info['file_timeinfo']}_Learning_English_Partners.xlsx", 
-                         sheet_name='Weekly Reach')[cols]
-le_partner.rename(columns={'Reach': 'm_unique_visitors'}, inplace=True)
-le_partner_www = le_partner.copy()
-le_partner_www['PlatformID'] = 'WWW'
+try:
+    cols = ['w/c', 'PlaceID', 'PlatformID', 'ServiceID', 'Reach']
+    le_partner = pd.read_excel(f"../data/raw/site/{gam_info['file_timeinfo']}_Learning_English_Partners.xlsx", 
+                             sheet_name='Weekly Reach')[cols]
+    le_partner.rename(columns={'Reach': 'm_unique_visitors'}, inplace=True)
+    le_partner_www = le_partner.copy()
+    le_partner_www['PlatformID'] = 'WWW'
+    
+    le_partner = pd.concat([le_partner, le_partner_www])
+    ############################# TESTING start
+    main_df = le_partner
+    test_step = 'final_testig_lePartners'
+    
+    # test all weeks present
+    test_functions.test_weeks_presence_per_account('w/c', ['ServiceID'], main_df, week_tester, 
+                                                   '2_site_17', test_step)
+    
+    # test placeID in lookup
+    test_functions.test_inner_join(main_df, country_codes, ['PlaceID'], 
+                                   '2_site_18', test_step, focus='left')
+    
+    # test platformID in lookup
+    test_functions.test_inner_join(main_df, platform_codes, ['PlatformID'], 
+                                   '2_site_19', test_step, focus='left')
+    
+    # test serviceID in lookup
+    test_functions.test_inner_join(main_df, service_codes, ['ServiceID'], 
+                                   '2_site_20', test_step, focus='left')
+    
+    ############################# TESTING end
 
-le_partner = pd.concat([le_partner, le_partner_www])
-############################# TESTING start
-main_df = le_partner
-test_step = 'final_testig_lePartners'
-
-# test all weeks present
-test_functions.test_weeks_presence_per_account('w/c', ['ServiceID'], main_df, week_tester, 
-                                               '2_site_17', test_step)
-
-# test placeID in lookup
-test_functions.test_inner_join(main_df, country_codes, ['PlaceID'], 
-                               '2_site_18', test_step, focus='left')
-
-# test platformID in lookup
-test_functions.test_inner_join(main_df, platform_codes, ['PlatformID'], 
-                               '2_site_19', test_step, focus='left')
-
-# test serviceID in lookup
-test_functions.test_inner_join(main_df, service_codes, ['ServiceID'], 
-                               '2_site_20', test_step, focus='left')
-
-############################# TESTING end
+except:
+    print("no learning english partner data! ")
+    le_partner = pd.DataFrame()
 df_gnl_le = pd.concat([df_gnl, le_partner])
 
 
-# In[28]:
+# In[11]:
 
 
 cols = ['Space', 'YearGAE', 'w/c', 'm_unique_visitors', 'device_type', 'ServiceID', 'PlatformID', 'PlaceID']

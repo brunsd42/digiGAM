@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[9]:
+# In[1]:
 
 
 from datetime import datetime
@@ -22,7 +22,7 @@ from tqdm import tqdm
 
 # ## import helper
 
-# In[12]:
+# In[2]:
 
 
 import sys
@@ -45,7 +45,7 @@ import test_functions
 import functions
 
 
-# In[13]:
+# In[3]:
 
 
 # country
@@ -79,23 +79,9 @@ non_js_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_
 app_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_App')
 
 
-# In[14]:
-
-
-week_tester.columns
-
-
-# ## functions
-
 # # ingestion
 # ## Chartbeat
-# 
-
-# In[ ]:
-
-
-
-
+# the idea is to get site reach also from chartbeat and have a comparison - if the values ranges widely it needs to be reviewed why and what the most accurate reach is.
 
 # ## Piano
 
@@ -110,7 +96,7 @@ test_functions.site_test_unique_entries(site_info, 'Report No.', '1_Site_1', 'in
 
 i = 0
 for index, row in site_info.iterrows():
-    
+    # TODO find Studios / WSL logic switch for API keys
     api_query = row['API']
     api_query_key = api_key[row['api_key']]
     report_no = row['Report No.']
@@ -121,7 +107,9 @@ for index, row in site_info.iterrows():
     
     for jndex, row in week_tester.iterrows():
         week_number = row['WeekNumber_finYear']
-        filename = f"../data/raw/site/piano_reports/{gam_info['file_timeinfo']}_reportNo{report_no}_weekNo{week_number}.csv"
+        path = "../data/raw/site/piano_reports"
+        os.makedirs(path, exist_ok=True)
+        filename = f"{path}/{gam_info['file_timeinfo']}_reportNo{report_no}_weekNo{week_number}.csv"
         
         # Check if the file exists, if so, continue to the next iteration
         if os.path.exists(filename):
@@ -130,7 +118,10 @@ for index, row in site_info.iterrows():
         print(f"... iteration {filename}")
         start = row['w/c'] # dtype object
         end = row['week_ending'] # dtype object
-        
+
+        if pd.to_datetime(end) > datetime.today():
+            print('date in future')
+            break
         # convert to api query 
         query = functions.convert_url_to_query(api_query, start, end)
         
@@ -142,12 +133,8 @@ for index, row in site_info.iterrows():
         temp['API'] = api_query
 
         if temp.shape[0] == 0:
-            temp = pd.DataFrame({
-                'w/c': [start],
-                'timestamp_queryRun': [datetime.now().strftime('%y%m%d-%H%M')],
-                'api_query': [api_query]
-            })
-            
+            temp = pd.DataFrame()
+        
         temp.to_csv(filename, index=None)
         
     print(f"finished report no {report_no}")
@@ -166,7 +153,7 @@ for index, row in site_info.iterrows():
 
 # ## Chartbeat vs Piano
 
-# In[12]:
+# In[7]:
 
 
 # build at home
@@ -203,8 +190,8 @@ combined_df = pd.concat(all_files)
 if 'API' not in combined_df.columns:
     print('adding API')
     combined_df['API'] = ''
-combined_df['API'] = combined_df['API'].fillna(combined_df['api_query'])
-combined_df.drop(columns=['api_query'], inplace=True)
+#combined_df['API'] = combined_df['API'].fillna(combined_df['api_query'])
+#combined_df.drop(columns=['api_query'], inplace=True)
 combined_df['w/c'] = pd.to_datetime(combined_df['w/c'] )
 
 
@@ -228,8 +215,9 @@ full_df = full_df.merge(week_tester[['YearGAE', 'WeekNumber_finYear', 'w/c']], o
 # excluded: 'API', 'timestamp_queryRun', 'filename', 'Year',
 cols = ['Category', 'Report No.', 'Space', 'Description', 
         'YearGAE', 'WeekNumber_finYear', 'w/c',  
-        'site_level2', 'geo_country', 'm_unique_visitors', 'm_page_loads', 
-        'device_type', 'app_name', 'language', 'producer_nonjs', 'src']
+        'site_level2', 'geo_country', 'm_unique_visitors', 
+        #'app_name', 
+        'device_type', 'language', 'producer_nonjs']
 full_df = full_df[cols]
 
 
@@ -249,19 +237,13 @@ for column, dtype in dtype_spec.items():
     if column in full_df.columns:
         full_df[column] = full_df[column].apply(lambda x: str(x) if pd.notnull(x) else '')
 
-full_df.to_csv(f"../data/raw/{gam_info['file_timeinfo']}_rawDataFromPiano.csv", index=None)
+full_df.to_csv(f"../data/raw/site/{gam_info['file_timeinfo']}_rawDataFromPiano.csv", index=None)
 
 
 # In[10]:
 
 
-full_df.sample()
-
-
-# In[11]:
-
-
-full_df['Report No.'].unique()
+full_df.head()
 
 
 # In[ ]:

@@ -38,7 +38,7 @@ def test_filter_elements_returned(df, filter_elements, column_name, test_number,
     
     # Print the results
     if not issues_df.empty:
-        print(f"❌ Test {test_number} failed: not all elements were retrieved")
+        print(f"❌ Test {test_number} failed: not all elements from lookup were retrieved in dataset - decide if they are really missing or if these accounts are inactive ")
     else:
         print(f"✅ Test {test_number} passed: everything found!")
     
@@ -253,8 +253,7 @@ def test_allowed_values(df, test_column, allowed_values, test_number, test_step=
         print("✅ Pass - found only allowed values")
     update_logbook(test_number, issues_df, 'testing no other values than specific occur in col', test_step)
 
-
-def test_hierarchy_reach(test_number, mode, gam_info, df, key, metric_col, test_step):
+def test_hierarchy_reach(test_number, mode, gam_info, df, key, metric_col, test_step, round_metric=False):
     """
     Test that the reach of each parent service is not smaller than any of its child services, but it is okay if it is smaller than the sum of its child services.
 
@@ -285,10 +284,18 @@ def test_hierarchy_reach(test_number, mode, gam_info, df, key, metric_col, test_
     if mode == 'Service':
         sheet_name = 'Service Hierarchy'
         col_name = 'ServiceID'
+        
+        dimension = 'PlatformID'
+        dimension_to_subgroup = df[dimension].unique().tolist()
+        # make sure only one platform is in 
 
     if mode == 'Platform':
         sheet_name = 'Platform Hierarchy'
         col_name = 'PlatformID'
+        
+        dimension = 'ServiceID'
+        dimension_to_subgroup = df[dimension].unique().tolist()
+        # make sure only one service is in 
         
     # Read the hierarchy from the Excel file
     hierarchy_df = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name=sheet_name,
@@ -319,18 +326,29 @@ def test_hierarchy_reach(test_number, mode, gam_info, df, key, metric_col, test_
     # Create a new DataFrame with expanded combinations
     hierarchy_df = pd.DataFrame(expanded_combinations)
 
-    # add child reach platform and place
-    merged_df = hierarchy_df.merge(df, left_on='Child', right_on=col_name, how='inner')
-    merged_df = merged_df.rename(columns={metric_col: f'Child_{metric_col}'}).drop(columns=col_name)
-
-    # add parent reach to service, platform and place
-    merged_df = merged_df.merge(df, left_on=key+['Parent'], right_on=key+[col_name], how='inner')
-    merged_df = merged_df.rename(columns={metric_col: f'Parent_{metric_col}'}).drop(columns=col_name)
+    issues_list = []
+    for subgroup in dimension_to_subgroup: #either for service if platform is run or vice versa
+        temp = df[df[dimension] == subgroup]
+        # add child reach platform and places
+        merged_df = hierarchy_df.merge(temp, left_on='Child', right_on=col_name, how='inner')
+        merged_df = merged_df.rename(columns={metric_col: f'Child_{metric_col}'}).drop(columns=col_name)
     
-    # Run the test
-    issues_df = merged_df[merged_df[f'Child_{metric_col}'] > merged_df[f'Parent_{metric_col}']]
-    issues_df['diff'] = issues_df[f'Child_{metric_col}'] - issues_df[f'Parent_{metric_col}']
-    update_logbook(test_number, issues_df.sort_values('diff', ascending=False), 
+        # add parent reach to service, platform and place
+        merged_df = merged_df.merge(temp, left_on=key+['Parent'], right_on=key+[col_name], how='inner')
+        merged_df = merged_df.rename(columns={metric_col: f'Parent_{metric_col}'}).drop(columns=col_name)
+    
+        # Optional rounding
+        if round_metric:
+            merged_df[f'Child_{metric_col}'] = merged_df[f'Child_{metric_col}'].round()
+            merged_df[f'Parent_{metric_col}'] = merged_df[f'Parent_{metric_col}'].round()
+    
+        # Run the test
+        issues_df = merged_df[merged_df[f'Child_{metric_col}'] > merged_df[f'Parent_{metric_col}']]
+        issues_df.loc[:, 'diff'] = issues_df[f'Child_{metric_col}'] - issues_df[f'Parent_{metric_col}']
+
+        issues_list.append(issues_df)
+    full_issue_df = pd.concat(issues_list)
+    update_logbook(test_number, full_issue_df.sort_values('diff', ascending=False), 
                    'testing platform hierarchy reach', test_step)
     
     if not issues_df.empty:

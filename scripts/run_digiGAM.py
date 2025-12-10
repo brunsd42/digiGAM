@@ -2,77 +2,74 @@ import subprocess
 from pathlib import Path
 
 # Define paths
-script_dir = Path("../scripts")
+#script_dir = Path(__file__).resolve().parent  # Always points to the scripts folder
+script_dir = Path.cwd()  # Current working directory
 log_dir = Path("../logs")
 log_dir.mkdir(parents=True, exist_ok=True)
 
 # Define groups by platform
 groups = {
-    #"podcast": [
-    #    "1_podcast_ingestion.py",
-    #    "2_podcast_processing.py"
-    #],
-    #"site": [
-    #    "1_site_ingestion.py",
-    #    "2_site_processing.py",
-    #    "3_site_reach.py"
-    #],
-    #"facebook": [
-    #    "1_socialMedia_ingestion_facebook_country.py",
-    #    "1_socialMedia_ingestion_facebook_engagements.py",
-    #    "3_socialMedia_combination_facebook.py",
-    #    "4_socialMedia_processing_facebook.py",
-    #    "5_test_comparingMK_BD_social_fb.py"
-    #],
-    #"instagram": [
-    #    "1_socialMedia_ingestion_instagram_country.py",
-    #    "1_socialMedia_ingestion_instagram_engagements.py",
-    #    "3_socialMedia_combination_instagram.py",
-    #    "4_socialMedia_processing_instagram.py",
-    #    "5_test_comparingMK_BD_social_ig.py"
-    #],
-    #"twitter": [
-    #    "1_socialMedia_ingestion_twitter_country.py",
-    #    "1_socialMedia_ingestion_twitter_engagments.py",
-    #    "3_socialMedia_combination_twitter.py",
-    #    "4_socialMedia_processing_twitter.py",
-    #    "5_test_comparingMK_BD_social_twitter.py"
-    #],
-    #"youtube": [
-    #    "1_socialMedia_ingestion_youtube_analytics.py",
-    #    "1_socialMedia_ingestion_youtube_redshift.py",
-    #    "3_socialMedia_combination_youtube.py",
-    #    "4_socialMedia_processing_youtube.py",
-    #    "5_test_comparingMK_BD_social_yt.py"
-    #],
-    "tiktok": [
-    #    "1_socialMedia_ingestion_tiktok.py",
-    #    "3_socialMedia_combination_tiktok.py",
-        "4_socialMedia_processing_tiktok.py",
-        "5_test_comparingMK_BD_social_ttk.py"
+    "facebook": [
+        #"1_socialMedia_ingestion_facebook_country_fromNotebook.py",
+        #"1_socialMedia_ingestion_facebook_engagements_fromNotebook.py",
+        #"3_socialMedia_combination_facebook_fromNotebook.py",
+        #"4_socialMedia_processing_facebook_fromNotebook.py",
     ],
+    "instagram": [
+        #"1_socialMedia_ingestion_instagram_country_fromNotebook.py",
+        #"1_socialMedia_ingestion_instagram_engagements_fromNotebook.py",
+        #"3_socialMedia_combination_instagram_fromNotebook.py",
+        #"4_socialMedia_processing_instagram_fromNotebook.py",
+    ],
+    "twitter": [
+        #"1_socialMedia_ingestion_twitter_country_fromNotebook.py",
+        #"1_socialMedia_ingestion_twitter_engagments_fromNotebook.py",
+        #"3_socialMedia_combination_twitter_fromNotebook.py",
+        #"4_socialMedia_processing_twitter_fromNotebook.py",
+    ],
+    "youtube": [
+        #"1_socialMedia_ingestion_youtube_analytics_fromNotebook.py",
+        #"1_socialMedia_ingestion_youtube_redshift_fromNotebook.py",
+        #"3_socialMedia_combination_youtube_fromNotebook.py",
+        #"4_socialMedia_processing_youtube_fromNotebook.py",
+    ],
+    "tiktok": [
+        #"1_socialMedia_ingestion_tiktok_fromNotebook.py",
+        "3_socialMedia_combination_tiktok_fromNotebook.py",
+        "4_socialMedia_processing_tiktok_fromNotebook.py",
+    ],
+    "site": [
+        #"1_site_ingestion_fromNotebook.py",
+        #"2_site_processing_fromNotebook.py",
+        #"3_site_reach_fromNotebook.py"
+    ],
+    "podcast": [
+        #"1_podcast_ingestion_fromNotebook.py",
+        #"2_podcast_processing_fromNotebook.py"
+    ],
+    
     #"telegram": [
-    #    "1_socialMedia_ingestion_telegram.py"
+    #    "1_socialMedia_ingestion_telegram_fromNotebook.py"
     #],
     #"rest": [
-    #    "1_socialMedia_ingestion_Rest.py",
-    #    "5_test_comparingMK_BD_social_rest.py"
+    #    "1_socialMedia_ingestion_Rest_fromNotebook.py",
+    #    "5_test_comparingMK_BD_social_rest_fromNotebook.py"
     #]
 }
 
 final_scripts = [
-    "6_combining_social.py",
-    "5_test_comparingMK_BD_social_WSC.py",
-    "8_total_digital.py",
-    "5_test_comparingMK_BD_social_css.py"
+    "6_combining_social_fromNotebook.py",
+    "8_total_digital_fromNotebook.py",
 ]
 
 # Track if any group failed
 group_failed = False
 
 # Run each group
-for group_name, scripts in groups.items():
+for group_name in groups.keys():
+#for group_name in ['tiktok', 'site']:
     print(f"\nRunning group: {group_name}")
+    scripts = groups[group_name]
     try:
         for script_name in scripts:
             script_path = script_dir / script_name

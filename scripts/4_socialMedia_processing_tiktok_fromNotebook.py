@@ -52,9 +52,9 @@ import functions
 
 # country
 pop_size_col = gam_info['population_column']
-cols = ['PlaceID', pop_size_col]
+country_cols = ['PlaceID', pop_size_col]
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
-                              keep_default_na=False)[cols]
+                              keep_default_na=False)[country_cols]
 
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
@@ -74,12 +74,21 @@ formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_id
 
 # overlaps 
 overlaps = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='overlap')
-overlaps.head()
+
+### RUN TESTS
+test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_4_0", f"{platformID}_4_1", f"{platformID}_4_2"], 
+                                 test_step="lookup files - ensuring country codes is correct")
+
+test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_4_3", f"{platformID}_4_4", f"{platformID}_4_5"], 
+                                 test_step = "lookup files - ensuring week tester is correct")
+
+test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_4_6", f"{platformID}_4_7", f"{platformID}_4_8"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
 
 
 # ## import data 
 
-# In[25]:
+# In[5]:
 
 
 full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv")
@@ -90,12 +99,6 @@ full_df = full_df.merge(country_codes, on='PlaceID',
 print(full_df._merge.value_counts())
 full_df.drop(columns=['_merge'], inplace=True)
 full_df.sample()
-
-
-# In[32]:
-
-
-full_df = functions.filter_channels_by_weeks(full_df)
 
 
 # # calculate 
@@ -133,7 +136,7 @@ for bu in gam_info['business_units'].keys():
     df = functions.include_uk_decision(df, socialmedia_accounts)
     
     # for later testing or if sainsbury isn't used 
-    summed_uv_by_country = df.groupby(['ServiceID', 'w/c', 'PlaceID'])\
+    summed_uv_by_country = df.groupby(['ServiceID', 'w/c', 'PlaceID', pop_size_col])\
                                 .agg({'uv_by_country': 'sum'})\
                                 .reset_index()
     
@@ -161,6 +164,7 @@ for bu in gam_info['business_units'].keys():
         #calculate sainsbury
         channel_uv_by_country = functions.sainsbury_formula(channel_uv_by_country, pop_size_col, 
                                       channel_ids, 'uv_by_country')
+        channel_uv_by_country = channel_uv_by_country.drop(columns=channel_ids)
         
         cols_left =  ['w/c', 'PlaceID', 'uv_by_country']
         cols_right = ['w/c', 'PlaceID', 'ServiceID', 'uv_by_country']
@@ -178,15 +182,8 @@ for bu in gam_info['business_units'].keys():
     
     # storing data
     data[bu]['weekly'] = weekly_df
-    #data[bu]['annual'] = annual_df
     
     
-
-
-# In[23]:
-
-
-data['WSL']['weekly']['ServiceID'].value_counts()
 
 
 # ## AXE
@@ -194,26 +191,22 @@ data['WSL']['weekly']['ServiceID'].value_counts()
 # In[8]:
 
 
-grouped_service = 'AXE'
-data[grouped_service] = {'weekly': pd.DataFrame(),
-                         'annual': pd.DataFrame()}    
+data['AXE'] = {'weekly': pd.DataFrame()}
+temp = data['WSL']['weekly']
+data['AXE']['weekly'] = functions.calculate_weekly_Services(temp, 'AXE', platformID, pop_size_col,
+                                                               gam_info, 'sum') 
 
-
-# ### weekly 
-
-# In[9]:
-
-
-wsl_weekly = data['WSL']['weekly']
-wsl_weekly = wsl_weekly[~wsl_weekly['ServiceID'].isin(['SER', 'SIN'])]
-
-data[grouped_service]['weekly'] = functions.calculate_weekly_sumServices(wsl_weekly, grouped_service, platformID, gam_info)
+# TODO add explainer to make clear how a new service is created (BNI BNO breakout in GNL)
+data['GNL'] = {'weekly': pd.DataFrame()}
+temp = data['GNL_']['weekly']
+data['GNL']['weekly'] = functions.calculate_weekly_Services(temp, 'GNL', platformID, pop_size_col,
+                                                  gam_info) 
 
 
 # ## AX2, ANW, ANY, TOT, ALL, ENG, EN2 ENW
 # 
 
-# In[10]:
+# In[9]:
 
 
 path = f"../data/singlePlatform/{platformID}/"
@@ -230,4 +223,57 @@ stages = [
     ]
 data = functions.calculate_aggregated_services(data, stages, platformID, gam_info, path, overlaps, 
                                                 country_codes, pop_size_col)
+
+
+# In[10]:
+
+
+# test hierarchies
+
+
+# Combine all 'weekly' DataFrames
+cols = ['PlaceID', 'ServiceID', 'w/c', 'Reach', ]
+combined_weekly = pd.concat(
+    [v['weekly'] for v in data.values() if 'weekly' in v],
+    ignore_index=True
+)[cols]
+
+print(combined_weekly.shape)
+combined_weekly.sample()
+combined_weekly['PlatformID'] = platformID
+# SERVICE hierarchy issues
+test_step = "calculated high-level services"
+service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_9", 
+                                                               'Service', 
+                                                               gam_info, 
+                                                               combined_weekly, 
+                                                               ['w/c', 'PlaceID'],
+                                                               metric_col='Reach',
+                                                               test_step= test_step, 
+                                                                round_metric=True)
+
+
+# In[11]:
+
+
+combined_weekly.head()
+
+
+# In[12]:
+
+
+global_reach = combined_weekly.groupby(['ServiceID', 'w/c'])['Reach'].sum().reset_index()
+
+
+# In[13]:
+
+
+global_reach[#(combined_weekly['ServiceID'] == ) & 
+    (global_reach['w/c'] == '2025-10-27') ].sort_values('Reach', ascending=False) # should be AX2=mio
+
+
+# In[ ]:
+
+
+
 

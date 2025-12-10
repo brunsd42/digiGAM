@@ -58,16 +58,12 @@ import functions
 # country
 pop_size_col = gam_info['population_column']
 
-cols = ['PlaceID', pop_size_col]
+country_cols = ['PlaceID', pop_size_col]
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
-                              keep_default_na=False)[cols]
-cols = ['PLACEID1', pop_size_col]
-country_codes = pd.read_excel("../../../../Research Projects/GAM/Digital GAM/2021/Social Media/Population and Country 2021.xlsx", 
-                              keep_default_na=False)[cols].rename(columns={'PLACEID1': 'PlaceID'})
+                              keep_default_na=False)[country_cols]
 
 # week 
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
-                            sheet_name='GAM Period',)
+week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period',)
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 
 # social media accounts
@@ -83,7 +79,17 @@ formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_id
 
 # overlaps 
 overlaps = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='overlap')
-overlaps.head()
+
+
+### RUN TESTS
+test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_4_0", f"{platformID}_4_1", f"{platformID}_4_2"], 
+                                 test_step="lookup files - ensuring country codes is correct")
+
+test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_4_3", f"{platformID}_4_4", f"{platformID}_4_5"], 
+                                 test_step = "lookup files - ensuring week tester is correct")
+
+test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_4_6", f"{platformID}_4_7", f"{platformID}_4_8"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
 
 
 # ## import data 
@@ -92,7 +98,7 @@ overlaps.head()
 
 
 full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv")
-
+                      
 
 full_df.head()
 
@@ -107,10 +113,6 @@ full_df = full_df.merge(country_codes, on='PlaceID',
                         how='left', indicator=True)
 print(full_df._merge.value_counts())
 full_df.drop(columns=['_merge'], inplace=True)
-
-display(full_df.sample())
-
-full_df = functions.filter_channels_by_weeks(full_df)
 
 
 # ## functions
@@ -134,8 +136,7 @@ for bu in temp_bus:
 '''#
 for bu in gam_info['business_units'].keys():
     print(f"### processing {bu} ######################################################")
-    data[bu] = {'weekly': 'tbd', 
-                #'annual': 'tbd'
+    data[bu] = {'weekly': pd.DataFrame()
                }
     
     bu_configs = gam_info['business_units'][bu]
@@ -170,7 +171,7 @@ for bu in gam_info['business_units'].keys():
     
         # check for missing values
         # especially in the string columns no values should be missing
-        msno.matrix(channel_uv_by_country)
+        #msno.matrix(channel_uv_by_country)
         
         # fill missing values with 0 - this is good fi the matrix above showed that the string 
         # columns did not have any missings so the only gaps filled are numeric. 
@@ -179,6 +180,7 @@ for bu in gam_info['business_units'].keys():
         #calculate sainsbury
         channel_uv_by_country = functions.sainsbury_formula(channel_uv_by_country, pop_size_col, 
                                       channel_ids, 'uv_by_country')
+        channel_uv_by_country = channel_uv_by_country.drop(columns=channel_ids)
         
         cols_left =  ['w/c', 'PlaceID', 'uv_by_country']
         cols_right = ['w/c', 'PlaceID', 'ServiceID', 'uv_by_country']
@@ -196,53 +198,38 @@ for bu in gam_info['business_units'].keys():
     
     # storing data
     data[bu]['weekly'] = weekly_df
-    #data[bu]['annual'] = annual_df
     
     
-
-
-# In[14]:
-
-
-full_df[(full_df['ServiceID'] == 'WSE') & 
-    (full_df['w/c'] == '2025-02-03') & 
-    (full_df['PlaceID'] == 'IND')]
-
-
-# In[16]:
-
-
-bu_df = data['WSE']['weekly']
-bu_df[(bu_df['ServiceID'] == 'WSE') & 
-    (bu_df['w/c'] == '2025-02-03') & 
-    (bu_df['PlaceID'] == 'IND')]
-
-
-# ## AXE
-
-# In[11]:
-
-
-grouped_service = 'AXE'
-data[grouped_service] = {'weekly': pd.DataFrame()}
     
 
 
-# ### weekly 
+# ## AXE, GNL
 
-# In[12]:
+# In[9]:
 
 
-wsl_weekly = data['WSL']['weekly']
-wsl_weekly = wsl_weekly[~wsl_weekly['ServiceID'].isin(['SER', 'SIN'])]
+data['AXE'] = {'weekly': pd.DataFrame()}
+data['AXE']['weekly'] = functions.calculate_weekly_Services(data['WSL']['weekly'], 'AXE', 
+                                                            platformID, pop_size_col,
+                                                            gam_info, 'sum') 
 
-data[grouped_service]['weekly'] = functions.calculate_weekly_sumServices(wsl_weekly, grouped_service, platformID, gam_info)
+# TODO add explainer to make clear how a new service is created (BNI BNO breakout in GNL)
+data['GNL'] = {'weekly': pd.DataFrame()}
+data['GNL']['weekly'] = functions.calculate_weekly_Services(data['GNL_']['weekly'], 'GNL', 
+                                                            platformID, pop_size_col,
+                                                            gam_info) 
+
+
+# In[ ]:
+
+
+
 
 
 # ## AX2, ANW, ANY, TOT, ALL, ENG, EN2 ENW
 # 
 
-# In[13]:
+# In[10]:
 
 
 path = f"../data/singlePlatform/{platformID}/"
@@ -259,4 +246,35 @@ stages = [
     ]
 data = functions.calculate_aggregated_services(data, stages, platformID, gam_info, path, overlaps, 
                                                 country_codes, pop_size_col)
+
+
+# In[13]:
+
+
+# Combine all 'weekly' DataFrames
+cols = ['PlaceID', 'ServiceID', 'w/c', 'Reach', ]
+combined_weekly = pd.concat(
+    [v['weekly'] for v in data.values() if 'weekly' in v],
+    ignore_index=True
+)[cols]
+
+print(combined_weekly.shape)
+combined_weekly.sample()
+combined_weekly['PlatformID'] = platformID
+# SERVICE hierarchy issues
+test_step = "calculated high-level services"
+service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_9", 
+                                                               'Service', 
+                                                               gam_info, 
+                                                               combined_weekly, 
+                                                               ['w/c', 'PlaceID'],
+                                                               metric_col='Reach',
+                                                               test_step= test_step, 
+                                                                round_metric=True)
+
+
+# In[ ]:
+
+
+
 

@@ -1,5 +1,6 @@
 from IPython.display import display
 
+import os
 import pandas as pd 
 import numpy as np
 import psycopg2
@@ -13,8 +14,6 @@ import missingno as msno
 import urllib.parse
 
 import security_config
-
-
 
     
 ################### PIANO
@@ -113,6 +112,29 @@ def execute_sql_query(sql_query):
 
 ################################ single platform calculations
 
+def gnl_expander(df):
+    """
+    Duplicate rows where ServiceID == 'GNL' into two rows with ServiceID 'BNI' and 'BNO'.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing a 'ServiceID' column.
+
+    Returns:
+        pd.DataFrame: DataFrame with additional rows for BNI and BNO.
+    """
+    gnl_rows = df[df['ServiceID'] == 'GNL']
+    if not gnl_rows.empty:
+        bni_rows = gnl_rows.copy()
+        bni_rows['ServiceID'] = 'BNI'
+
+        bno_rows = gnl_rows.copy()
+        bno_rows['ServiceID'] = 'BNO'
+
+        df = pd.concat([df, bni_rows, bno_rows], ignore_index=True)
+
+    return df
+
+
 def filter_channels_by_weeks(df, week_col='w/c', channel_col='Channel ID', min_weeks=12):
     """
     Filters channels that have at least `min_weeks` of data and reports excluded channels.
@@ -155,13 +177,6 @@ def include_uk_decision(df, lookup):
     temp = df.merge(lookup[['Channel ID', 'Excluding UK']], on=['Channel ID'] , how='left')
     return temp[~((temp['PlaceID']=='UK') & (temp['Excluding UK']=='Yes'))]
         
-def calculate_weekly(df, platformID, gam_info):
-    msno.matrix(df)
-    weekly_df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-    
-    weekly_df['PlatformID'] = platformID
-    weekly_df['YearGAE'] = gam_info['YearGAE']
-    return weekly_df
 
 '''def calculate_annualy(df, platform, gam_info, aggregation_pattern='year'):
     world_avg = df.groupby(['ServiceID', 'w/c'])['Reach'].sum().reset_index()
@@ -209,14 +224,16 @@ def calculate_annualy(df, platformID, gam_info, aggregation_type='new'):
                 if len(merged) == len(weeks):
                     return group['Reach'].mean()
                 else:
-                    return group['Reach'].sum() / gam_info['number_of_weeks']
+                    # given that the dataset will always contain the financial year data we can take the 
+                    # number of weeks from that column (it starts with 1 and increaeses week by week)
+                    return group['Reach'].sum() / weeks.max()
     
-            return group['Reach'].sum() / gam_info['number_of_weeks']
+            return group['Reach'].sum() / weeks.max()
     
         # Apply the logic to each ServiceID-PlaceID group
         year_avg = df.groupby(['ServiceID', 'PlaceID']).apply(compute_reach).reset_index(name='Reach')
     else: 
-        print('calculating the average and not divding by 52')
+        print('calculating the average and not divding by weeks in the timeframe')
         year_avg = df.groupby(['ServiceID', 'PlaceID', 'w/c'])['Reach'].sum().reset_index()
         year_avg = year_avg.groupby(['ServiceID', 'PlaceID'])['Reach'].mean().reset_index()
     
@@ -227,23 +244,30 @@ def calculate_annualy(df, platformID, gam_info, aggregation_type='new'):
 
     return annual_df
 
-def summary_excel(weekly_df, business_part, platformID, gam_info, aggregation_type='new'):
-    path = "../data/singlePlatform/"
+def summary_excel(df, business_part, platformID, gam_info, aggregation_type='new',
+                  store_annual=False):
+    weekly_df = df.copy()
+    weekly_df = weekly_df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+    weekly_df['PlatformID'] = platformID
+    weekly_df['YearGAE'] = gam_info['YearGAE']
+    
+    path = f"../data/singlePlatform/{platformID}/weekly/"
+    os.makedirs(path, exist_ok=True)
+    file = f"{gam_info['file_timeinfo']}_WEEKLY_{platformID}_{business_part}byCountry.xlsx"
+    
     col_order = ['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID', 'w/c', 'Reach']
-    weekly_df = calculate_weekly(weekly_df, platformID, gam_info)[col_order]
-    
-    file_path = f"{platformID}/weekly/{gam_info['file_timeinfo']}_WEEKLY_{platformID}_{business_part}byCountry.xlsx"
-    weekly_df.to_excel(path+file_path, index=None)
-    print(f"saved weekly file for {business_part} as:\n {file_path}") 
+    weekly_df[col_order].to_excel(f"{path}/{file}", index=None)
+    print(f"saved weekly file for {business_part} as:\n {path}/{file}") 
 
-    '''col_order = ['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
-    annual_df = calculate_annualy(weekly_df, platform, gam_info, aggregation_type)[col_order]
-    
-    file_path = f"{gam_info['file_timeinfo']}_{platform}_{business_part}.xlsx"
-    annual_df.to_excel(path+file_path, index=None)
-    print(f"saved annual file for {business_part} as:\n {file_path}")
-    '''
-    return weekly_df#, annual_df
+    if store_annual:
+        col_order = ['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
+        annual_df = calculate_annualy(weekly_df, platform, gam_info, aggregation_type)[col_order]
+        
+        file_path = f"{gam_info['file_timeinfo']}_{platform}_{business_part}.xlsx"
+        annual_df.to_excel(path+file_path, index=None)
+        print(f"saved annual file for {business_part} as:\n {file_path}")
+
+    return weekly_df
     
 '''def calculating_weekly_reach(df, platform, bu, gam_info, service=''):
     # calculate weekly reach by service, country and week for a given platform 
@@ -327,9 +351,43 @@ def sainsbury_formula(df, population_col, channel_list, col_name, deal_with_zero
     return df
 
 def calculate_weekly_sumServices(df, serviceID, platformID, gam_info):
-    
+    df = df.copy()
     # temporary to explain discrepancy to minnie's values
     df_weekly = df.groupby(['PlaceID', 'w/c'])['Reach'].sum().reset_index()
+    df_weekly['Reach'] = df_weekly['Reach']
+    df_weekly['ServiceID'] = serviceID
+    df_weekly['PlatformID'] = platformID
+    df_weekly['YearGAE'] = gam_info['YearGAE']
+    
+    path = f"../data/singlePlatform/{platformID}/weekly/"
+    filename = f"{gam_info['file_timeinfo']}_WEEKLY_{platformID}_{serviceID}byCountry.xlsx"
+    
+    col_order = ['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID', 'w/c', 'Reach']
+    df_weekly.to_excel(path+filename, index=None)
+    
+    return df_weekly
+
+def calculate_weekly_Services(df, serviceID, platformID, pop_size_col, gam_info, combi_type='sainsbury', ):
+    
+    if len(df) == 0:
+        print('no data in the dataframe')
+        return df
+    df = df.copy()
+    if combi_type == 'sainsbury':
+        service_list = df.ServiceID.unique()
+        if len(service_list) >= 2:
+            df_weekly = pd.crosstab(index = [ df['PlaceID'], 
+                                              df[pop_size_col], 
+                                              df['w/c']],
+                                    columns = df['ServiceID'],
+                                    values =  df['Reach'],
+                                    aggfunc='sum'
+                                    ).reset_index().fillna(0)
+            df_weekly = sainsbury_formula(df_weekly, pop_size_col, service_list, 'Reach')
+        else:
+            df_weekly = df
+    else:
+        df_weekly = df.groupby(['PlaceID', 'w/c'])['Reach'].sum().reset_index()
     df_weekly['Reach'] = df_weekly['Reach']
     df_weekly['ServiceID'] = serviceID
     df_weekly['PlatformID'] = platformID
@@ -447,9 +505,6 @@ def process_overlap_v2(data, service1, service2, grouped_service,
     service3 is only used for overlap_type 'sainsbury'.
     """
 
-    import numpy as np
-    import pandas as pd
-
     # Ensure the grouped_service key exists
     if grouped_service not in data:
         data[grouped_service] = {}
@@ -551,7 +606,7 @@ def calculate_aggregated_services(data, stages, platform, gam_info, path,
 
     for stage in stages:
         grouped_service, s1, s2, o_type, o_id, use_v2, s3 = stage
-        data[grouped_service] = {'weekly': 'tbd', 'annual': 'tbd'}
+        data[grouped_service] = {'weekly': pd.DataFrame(), 'annual': pd.DataFrame()}
         
         if use_v2:
             pivot, annual = process_overlap_v2(

@@ -76,7 +76,6 @@ country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Co
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-week_tester['week_ending'] = pd.to_datetime(week_tester['week_ending'])
 
 # social media accounts
 dtype_dict = {'Channel ID': 'str',
@@ -91,7 +90,17 @@ socialmedia_accounts = socialmedia_accounts.rename(columns={'Excluding UK': 'Cha
 
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
-socialmedia_accounts.sample()
+
+### RUN TESTS
+test_functions.test_lookup_files(country_codes, ['PlaceID'], [f"{platformID}_3_0", f"{platformID}_3_1", f"{platformID}_3_2"], 
+                                 test_step="lookup files - ensuring country codes is correct")
+
+test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_3_3", f"{platformID}_3_4", f"{platformID}_3_5"], 
+                                 test_step = "lookup files - ensuring week tester is correct")
+
+test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_3_6", f"{platformID}_3_7", f"{platformID}_3_8"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
+
 
 
 # # Unique Viewers
@@ -103,18 +112,25 @@ uniqueViewer_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_t
 uniqueViewer_df.sample()
 
 
+# In[7]:
+
+
+uniqueViewer_df['w/c'].max()
+
+
 # # Country
 
 # In[8]:
 
 
-country_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_country_new.csv")
+country_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_REDSHIFT_COUNTRY.csv")
 country_df.sample()
+country_df['w/c'].max()
 
 
 # # combine UV & country
 
-# In[10]:
+# In[9]:
 
 
 yt_uv_country = uniqueViewer_df.merge(country_df, 
@@ -124,20 +140,16 @@ yt_uv_country = uniqueViewer_df.merge(country_df,
 ################################### Testing ################################### 
 test_step = 'merging uv & country'
 
-test_functions.test_inner_join(uniqueViewer_df, country_df, ['Channel ID', 'w/c'], '1_YT_18', test_step)
+test_functions.test_inner_join(uniqueViewer_df, country_df, 
+                               ['Channel ID', 'w/c'], 
+                               f"9_{platformID}_combination", test_step)
 
 ################################### Testing ################################### 
 
 print(yt_uv_country._merge.value_counts())
 
 
-# In[11]:
-
-
-#yt_uv_country.to_csv('temp_yt_uvCountry.csv', index=None)
-
-
-# In[12]:
+# In[10]:
 
 
 yt_uv_country = yt_uv_country[yt_uv_country['_merge'] == 'both'].drop(columns=['_merge'])
@@ -145,36 +157,12 @@ yt_uv_country['uv_by_country'] = yt_uv_country['country_%'] * yt_uv_country['Uni
 yt_uv_country.sample()
 
 
-# In[13]:
+# In[11]:
 
 
-################################### Testing ################################### 
-# all weeks 
-# all weeks per channel
-# all weeks per service
-# all weeks per country
-
-# duplicates
-
-# test unique viewer is larger than unique vieewr per country 
-# test total of unique vieewr per country == unique viewer
-# test country sum == 1
-
-# test allowed values - placeID
-# test allowed values - ServiceID
-
-################################### Testing ################################### 
-
-
-# country tests
-# - [ ] check only one entry per country & week & channel
-# - [ ] check that sum of unique views per country == unique views gathered from yt clickedicklick
-# - [ ] check country sum==1 (groupby channel & week == 1)
-# - [ ] county the number of weeks we have for every channel counntry combination
-# - [ ] check that no channel name is empty
-
-# In[14]:
-
+print(yt_uv_country.shape)
+yt_uv_country = yt_uv_country.dropna(subset='uv_by_country')
+print(yt_uv_country.shape)
 
 cols = ['w/c', 'PlaceID', 'ServiceID', 'Channel ID', 'uv_by_country', ]
 yt_uv_country[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_uniqueViewer_country.csv", 

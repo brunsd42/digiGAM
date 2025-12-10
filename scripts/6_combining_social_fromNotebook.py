@@ -7,10 +7,13 @@
 from IPython.display import display
 
 import pandas as pd 
+pd.set_option('display.float_format', '{:.2f}'.format)
+
 import numpy as np
 
 import os
 from tqdm import tqdm
+from datetime import datetime, timedelta
 
 
 # In[2]:
@@ -35,39 +38,64 @@ import test_functions
 import functions 
 
 
-# In[33]:
+# In[3]:
+
+
+pd.set_option('display.max_columns', None)
+
+
+# In[4]:
 
 
 platformID = 'WSC'
 # country
 pop_size_col = gam_info['population_column']
 
-country_codes_cols = ['PlaceID', pop_size_col]
+country_cols = ['PlaceID', pop_size_col]
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
-                              keep_default_na=False)[country_codes_cols]
+                              keep_default_na=False)[country_cols]
 country_codes[pop_size_col] = (
     pd.to_numeric(country_codes[pop_size_col], errors='coerce')
     .fillna(1)
     .astype(int)
 )
-
+#########
 # week 
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period',)
+week_cols = ['w/c', 'YearGAE', 'WeekNumber_finYear']
+week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period',)[week_cols]
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-
+today = pd.Timestamp.today()
+last_monday = today - timedelta(days=today.weekday() + 7)
+valid_weeks = week_tester[week_tester['w/c'] <= last_monday]
+number_of_weeks = valid_weeks['WeekNumber_finYear'].max()
+#########
 service_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='ServiceID',)
 service_hierarchy = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Service Hierarchy',)
-
+#########
 platform_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='PlatformID',)
-
-overlap_SocWebOverlap = pd.read_excel("../helper/Final Overlaps 2021.xlsx", sheet_name='SocWebOverlap').drop(columns=['Population 2020']).drop_duplicates()
+#########
+overlap_SocWebOverlap = pd.read_excel("../data/stale/Final Overlaps 2021.xlsx", sheet_name='SocWebOverlap').drop(columns=['Population 2020']).drop_duplicates()
 overlap_SocWebOverlap['PlaceID'] = overlap_SocWebOverlap['PlaceID'].replace('MYT', 'MAY').replace('WLF', 'WFI')
 #overlap_SocWebOverlap = overlap_SocWebOverlap.merge(country_codes, on='PlaceID', how='left')
 
 
+### RUN TESTS
+test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_0", f"{platformID}_1", f"{platformID}_2"], 
+                                 test_step="lookup files - ensuring country codes is correct")
+
+test_functions.test_lookup_files(week_tester, week_cols, [f"{platformID}_3", f"{platformID}_4", f"{platformID}_5"], 
+                                 test_step = "lookup files - ensuring week tester is correct")
+
+test_functions.test_lookup_files(service_tester, ['ServiceID'], [f"{platformID}_6", f"{platformID}_7", f"{platformID}_8"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
+
+test_functions.test_lookup_files(platform_tester, ['PlatformID'], [f"{platformID}_9", f"{platformID}_10", f"{platformID}_11"], 
+                                 test_step = "lookup files - ensuring social media accounts is correct")
+
+
 # # functions 
 
-# In[4]:
+# In[5]:
 
 
 def compute_combined_reach(df, services, label, pop_size_col, country_codes, deal_with_zero=True, 
@@ -113,7 +141,7 @@ def compute_combined_reach(df, services, label, pop_size_col, country_codes, dea
 # 
 # ## workflow 5
 
-# In[5]:
+# In[6]:
 
 
 base_folder = "../data/singlePlatform/"
@@ -162,38 +190,41 @@ for platform_id in os.listdir(base_folder):
 singlePlatform_df = pd.concat(singlePlatform_df_list, ignore_index=True)
 
 
-# # processing 
-
-# ## test columns (& remove total )
-
-# In[6]:
+# In[9]:
 
 
-def test_merge(df, tester_df, key, label):
-    merged = df.merge(tester_df, on=key, how='left', indicator=True)
-    print(f"\nMissing {label}:", merged['_merge'].value_counts())
-    print(f"Unmatched {label}s:", merged[merged['_merge'] == 'left_only'][key].unique())
-    return merged[merged['_merge'] == 'both'].drop(columns=['_merge'])
+test_step = 'reading in all single platform values'
+# test that reach is >=0
+test_functions.test_non_null_and_positive(singlePlatform_df, ['Reach'], 
+                                          test_number=f"12_{platformID}", test_step=test_step)
+# test that all the combinations are unique (Service, Country, Week, Platform)
+test_functions.test_duplicates(singlePlatform_df, ['ServiceID', 'PlaceID', 'PlatformID', 'w/c'], 
+                               test_number=f"13_{platformID}", test_step=test_step)
+# test that all platofrms are there and for each platform all services 
+test_functions.test_filter_elements_returned(singlePlatform_df, service_tester['ServiceID'].unique(), 'ServiceID', 
+                                             test_number=f"14_{platformID}", test_step=test_step)
+test_functions.test_filter_elements_returned(singlePlatform_df, country_codes['PlaceID'].unique(), 'PlaceID', 
+                                             test_number=f"15_{platformID}", test_step=test_step)
+test_functions.test_filter_elements_returned(singlePlatform_df, platform_tester['PlatformID'].unique(), 'PlatformID', 
+                                             test_number=f"16_{platformID}", test_step=test_step)
+test_functions.test_filter_elements_returned(singlePlatform_df, week_tester['w/c'].unique(), 'w/c', 
+                                             test_number=f"17_{platformID}", test_step=test_step)
 
-temp1 = test_merge(singlePlatform_df, country_codes, 'PlaceID', 'PlaceID')
-temp2 = test_merge(singlePlatform_df, week_tester, 'w/c', 'w/c')
-temp3 = test_merge(singlePlatform_df, platform_tester, 'PlatformID', 'PlatformID')
-temp4 = test_merge(singlePlatform_df, service_tester, 'ServiceID', 'ServiceID')
 
-reach_issues = singlePlatform_df[(singlePlatform_df['Reach'] == 0) | (singlePlatform_df['Reach'].isna())]
-print("Rows with zero or missing Reach:", reach_issues.shape[0])
+# In[10]:
 
-duplicates = singlePlatform_df[singlePlatform_df.duplicated(subset=['ServiceID', 'PlatformID', 'PlaceID', 'w/c'])]
-print("Duplicate rows:", duplicates.shape[0])
 
 singlePlatform_df.to_csv(f"../data/combinePlatforms/social_media_data_{gam_info['file_timeinfo']}_platform_weekly.csv")
 
 
-# In[7]:
+# # processing 
+
+# ## test columns (& remove total )
+
+# In[11]:
 
 
 annual_singlePlatform_df = singlePlatform_df.groupby(['PlaceID', 'ServiceID', 'PlatformID'])['Reach'].sum().reset_index()
-
 # Calculate weeks per ServiceID
 weeks_per_service = singlePlatform_df.groupby(['ServiceID', 'PlatformID'])['w/c'].nunique()
 
@@ -206,7 +237,7 @@ annual_singlePlatform_df['weeks_count'] = annual_singlePlatform_df.apply(
 
 # Apply conditional division
 annual_singlePlatform_df['Reach'] = annual_singlePlatform_df.apply(
-    lambda row: row['Reach'] / (gam_info['number_of_weeks'] if row['weeks_count'] >= 12 else row['weeks_count']),
+    lambda row: row['Reach'] / (number_of_weeks if row['weeks_count'] >= 12 else row['weeks_count']),
     axis=1
 )
 
@@ -215,7 +246,7 @@ annual_singlePlatform_df.to_csv(f"../data/combinePlatforms/social_media_data_{ga
 
 # ## workflow 6
 
-# In[8]:
+# In[12]:
 
 
 full_service_df = pd.crosstab(
@@ -232,27 +263,39 @@ full_service_df.head()
 cols = full_service_df.columns
 
 
+# In[14]:
+
+
+'''
+full_service_df[
+    (full_service_df['PlaceID'] == 'POL') &
+    (full_service_df['ServiceID'].isin(ax2_services)) &
+    #(ax2_df_raw['PlatformID'].isin(['INS', 'WSC'])) 
+    (full_service_df['w/c'] == '2025-09-22')
+    ]'''
+
+
 # ### WSL
 
-# In[9]:
+# In[15]:
 
 
 # remove MA / WOR and agg services 
-exclude_ids = ['WOR', 'MA-', 
+exclude_ids = ['WOR', 'MA-', 'AXE',
                'ENG', 'EN2', 'ENW', 
                'ANW', 'TOT', 'AX2', 'ANY', 'ALL', ]
 weekly_ws_df = full_service_df[~full_service_df['ServiceID'].isin(exclude_ids)]
 
 # add overlaps
-weekly_ws_df = weekly_ws_df.merge(overlap_SocWebOverlap, on='PlaceID', how='left', indicator=True)
-weekly_ws_df.ServiceID.unique()
-weekly_ws_df.columns
-
-
-# Version 1
-
-# In[10]:
-
+# TODO filter columns in 
+cols = [#'Tapestry Market', 'Country Name', 
+        'PlaceID', 'FB & YT Factor', 'Own Web & Social Factor', 'Web', 'Facebook Incremental',
+        'YouTube Incremental', 'Social Incremental if YouTube bigger',
+        'Social Incremental if Facebook bigger', 'Social Incremental',
+        '% Twitter', '% Instagram', '% socialdedup Factor',
+        #'Unnamed: 15', 'Unnamed: 16'
+]
+weekly_ws_df = weekly_ws_df.merge(overlap_SocWebOverlap[cols], on='PlaceID', how='left', indicator=True)
 
 # Define expected platform columns
 platform_cols = ['FBE', 'INS', 'TWI', 'YT-', 'TTK', 'TEL']
@@ -267,7 +310,7 @@ for col in platform_cols:
 weekly_ws_df['Max Reach'] = weekly_ws_df[platform_cols].max(axis=1)
 
 
-# In[11]:
+# In[16]:
 
 
 # Step 2: Identify Max Platform
@@ -284,10 +327,7 @@ def get_max_platform(row):
         return 'Instagram'
 
 weekly_ws_df['Max Platform'] = weekly_ws_df.apply(get_max_platform, axis=1)
-
-
-# In[12]:
-
+ttk_increment = 0.3
 
 # Step 3: Calculate WSC1
 def calculate_wsc1(row):
@@ -295,16 +335,16 @@ def calculate_wsc1(row):
         return (row['FBE'] + row['YT-'] * row['YouTube Incremental'] +
                 row['INS'] * row['% Instagram'] +
                 row['TWI'] * row['% Twitter'] +
-                0.28 * row['TTK'])
+                ttk_increment * row['TTK'])
     elif row['Max Platform'] == 'YouTube':
         return (row['YT-'] + row['FBE'] * row['Facebook Incremental'] +
                 row['INS'] * row['% Instagram'] +
                 row['TWI'] * row['% Twitter'] +
-                0.28 * row['TTK'])
+                ttk_increment * row['TTK'])
     elif row['Max Platform'] == 'Instagram':
         return (row['INS'] + row['YT-'] * row['YouTube Incremental'] +
-                row['FBE'] * 0.03030303 +
-                0.28 * row['TTK'])
+                row['FBE']  * row['Facebook Incremental'] +
+                ttk_increment * row['TTK'])
     elif row['Max Platform'] == 'Tiktok':
         return (row['TTK'] + row['YT-'] * row['YouTube Incremental'] +
                 row['INS'] * row['% Instagram'] +
@@ -317,12 +357,6 @@ def calculate_wsc1(row):
 
 weekly_ws_df[f'{platformID}1'] = weekly_ws_df.apply(calculate_wsc1, axis=1)
 
-
-# Version 2
-
-# In[13]:
-
-
 # Ensure all required columns exist, fill missing ones with 0
 required_cols = ['FBE', 'YT-', 'INS', 'TWI', 'TTK', 'WEI', 'TEL', '% socialdedup Factor']
 for col in required_cols:
@@ -332,14 +366,24 @@ for col in required_cols:
 
 # Calculate WSC2
 weekly_ws_df[f'{platformID}2'] = (
-    (weekly_ws_df['FBE'] + weekly_ws_df['YT-'] + weekly_ws_df['INS'] + weekly_ws_df['TWI']) * weekly_ws_df['% socialdedup Factor']
-    + 0.28 * weekly_ws_df['TTK']
+    (weekly_ws_df['FBE'] + weekly_ws_df['YT-'] + weekly_ws_df['INS'] + weekly_ws_df['TWI'] + weekly_ws_df['TTK']) 
+    * weekly_ws_df['% socialdedup Factor']
 )
+weekly_ws_df.to_csv('../test/wsc_calculation_details.csv', index=None)
 
 
-# combined
+# In[18]:
 
-# In[14]:
+
+'''weekly_ws_df[
+    (weekly_ws_df['PlaceID'] == 'POL') &
+    (weekly_ws_df['ServiceID'].isin(ax2_services)) &
+    #(ax2_df_raw['PlatformID'].isin(['INS', 'WSC'])) 
+    (weekly_ws_df['w/c'] == '2025-09-22')
+    ]'''
+
+
+# In[23]:
 
 
 # Ensure all required columns exist
@@ -372,7 +416,7 @@ weekly_ws_df.head()
 
 # ### MA & Studios
 
-# In[15]:
+# In[24]:
 
 
 ma_wor_df = full_service_df[full_service_df['ServiceID'].isin(['WOR', 'MA-'])]
@@ -392,7 +436,7 @@ weekly_ma_wor_df.head()
 
 # prep the aggregate calculation
 
-# In[16]:
+# In[25]:
 
 
 weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
@@ -400,7 +444,7 @@ weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
 
 # ### ENW
 
-# In[17]:
+# In[26]:
 
 
 # Usage
@@ -411,7 +455,7 @@ enw_df.head()
 
 # ### ENG
 
-# In[18]:
+# In[27]:
 
 
 # Usage
@@ -422,7 +466,7 @@ eng_df.head()
 
 # ### EN2
 
-# In[19]:
+# In[28]:
 
 
 en2_services = ['ENG', 'WOR']
@@ -431,7 +475,7 @@ en2_df = compute_combined_reach(pd.concat([weekly_df, eng_df]), en2_services, 'E
 
 # ### AX2
 
-# In[34]:
+# In[29]:
 
 
 cols = ['PlaceID', 'digiGAM_FOA_WT-']
@@ -439,17 +483,17 @@ africa_dedup_countries = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet
 
 ax2_services = [
     'AFA','AMH','ARA','AZE','BEN','BUR','DAR','ECH','ELT','PER','FRE','GUJ','HAU','HIN','IGB','INO',
-    'KOR','KRW','KYR','MAN','MAR','NEP','PAS','PDG','POR','PUN','RUS','SER','SIN','SOM','SPA','SWA',
+    'KOR','KRW','KYR','MAN','MAR','NEP','PAS','PDG','POL','POR','PUN','RUS','SER','SIN','SOM','SPA','SWA',
     'TAM','TEL','THA','TIG','TUR','UKR','URD','UZB','VIE','YOR', 'FOA', 'UKPS'
 ]
 
-ax2_df = weekly_df[weekly_df['ServiceID'].isin(ax2_services)].merge(country_codes, on='PlaceID', how='left')
+ax2_df_raw = weekly_df[weekly_df['ServiceID'].isin(ax2_services)].merge(country_codes, on='PlaceID', how='left')
 ax2_df = pd.crosstab(
-                    index = [ ax2_df['PlaceID'], 
-                              ax2_df[pop_size_col], 
-                              ax2_df['w/c'],],
-                    columns = ax2_df['ServiceID'],
-                    values =  ax2_df['Reach'],
+                    index = [ ax2_df_raw['PlaceID'], 
+                              ax2_df_raw[pop_size_col], 
+                              ax2_df_raw['w/c'],],
+                    columns = ax2_df_raw['ServiceID'],
+                    values =  ax2_df_raw['Reach'],
                     aggfunc='sum'
                 ).reset_index()
 ax2_df = ax2_df.fillna(0)
@@ -459,7 +503,7 @@ for col in ax2_services:
         print(f'{col} missing!')
         ax2_df[col] = 0
 
-temp2 = ax2_df.merge(africa_dedup_countries, on='PlaceID', how='outer')
+temp2 = ax2_df.merge(africa_dedup_countries, on='PlaceID', how='left')
 africa_df = temp2[~temp2['digiGAM_FOA_WT-'].isna()]
 nonAfrica_df = temp2[temp2['digiGAM_FOA_WT-'].isna()]
 
@@ -472,17 +516,38 @@ def compute_value(row):
         return others_sum + row['FOA'] * 0.60745497
 
 africa_df['Reach'] = africa_df.apply(compute_value, axis=1)
-nonAfrica_df = functions.sainsbury_formula(nonAfrica_df, gam_info['population_column'], ax2_services, 'Reach')
+# change to sum rather than
+#nonAfrica_df = functions.sainsbury_formula(nonAfrica_df, gam_info['population_column'], ax2_services, 'Reach')
+nonAfrica_df['Reach'] = nonAfrica_df[ax2_services].sum(axis=1)
+
 ax2_df = pd.concat([africa_df, nonAfrica_df])
+
 ax2_df['ServiceID'] = 'AX2'
 ax2_df = ax2_df[['w/c', 'ServiceID', 'PlaceID', 'Reach']]
 
 ax2_df.head()
 
 
+# In[ ]:
+
+
+
+
+
+# In[30]:
+
+
+ax2_df_raw[
+    (ax2_df_raw['PlaceID'] == 'POL') &
+    #(digital_df['ServiceID'].isin(['AX2'])) &
+    #(ax2_df_raw['PlatformID'].isin(['INS', 'WSC'])) 
+    (ax2_df_raw['w/c'] == '2025-09-22')
+]['Reach'].sum()
+
+
 # ### ANW
 
-# In[35]:
+# In[31]:
 
 
 anw_services = ['AX2', 'WSE']
@@ -492,7 +557,7 @@ anw_df = compute_combined_reach(pd.concat([weekly_df, ax2_df]), anw_services, 'A
 
 # ### ANY
 
-# In[36]:
+# In[32]:
 
 
 any_services = ['ANW', 'GNL']
@@ -502,7 +567,7 @@ any_df = compute_combined_reach(pd.concat([weekly_df, anw_df]), any_services, 'A
 
 # ### TOT
 
-# In[37]:
+# In[33]:
 
 
 tot_services = ['ANY', 'MA-']
@@ -512,7 +577,7 @@ tot_df = compute_combined_reach(pd.concat([weekly_df, any_df]), tot_services, 'T
 
 # ### ALL
 
-# In[38]:
+# In[34]:
 
 
 all_services = ['TOT', 'WOR']
@@ -522,10 +587,10 @@ all_df = compute_combined_reach(pd.concat([weekly_df, tot_df]), all_services, 'A
 
 # ## finalising
 
-# In[39]:
+# In[35]:
 
 
-final_weekly_df = pd.concat([weekly_df, weekly_ma_wor_df, 
+final_weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df, 
                              enw_df, eng_df, en2_df, 
                              ax2_df, anw_df, any_df, tot_df, all_df])
 
@@ -533,27 +598,67 @@ final_weekly_df['PlatformID'] = platformID
 final_weekly_df['YearGAE'] = gam_info['YearGAE']
 
 
+# In[36]:
+
+
+# SERVICE hierarchy issues
+test_step = "calculated WSC reach"
+service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_6_18", 
+                                                               'Service', 
+                                                               gam_info, 
+                                                               final_weekly_df, 
+                                                               ['w/c', 'PlaceID'],
+                                                               metric_col='Reach',
+                                                               test_step= test_step, 
+                                                                round_metric=True)
+
+# PLATFORM hierarchy issues
+full_platform = pd.concat([singlePlatform_df, final_weekly_df])
+full_platform['PlatformID'].unique()
+
+test_step = "calculated WSC reach"
+platform_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_6_19", 
+                                                               'Platform', 
+                                                               gam_info, 
+                                                               full_platform, 
+                                                               ['w/c', 'PlaceID'],
+                                                               metric_col='Reach',
+                                                               test_step= test_step, 
+                                                                round_metric=True)
+
+
 # # store dataset
 
-# In[40]:
+# In[39]:
+
+
+'''ax2_ser = [
+    'AFA','AMH','ARA','AZE','BEN','BUR','DAR','ECH','ELT','PER','FRE','GUJ','HAU','HIN','IGB','INO',
+    'KOR','KRW','KYR','MAN','MAR','NEP','PAS','PDG','POR','PUN','RUS','SER','SIN','SOM','SPA','SWA',
+    'TAM','TEL','THA','TIG','TUR','UKR','URD','UZB','VIE','YOR', 'FOA', 'UKPS'
+]
+final_weekly_df[
+    (final_weekly_df['PlaceID'] == 'POL') &
+    (final_weekly_df['ServiceID'].isin(['AX2'])) &
+    (final_weekly_df['PlatformID'].isin(['INS', 'WSC'])) 
+    & (final_weekly_df['w/c'] == '2025-09-22')
+]
+'''
+
+
+# In[37]:
 
 
 final_weekly_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_{platformID}.csv", 
                        index=None)
 
 
-# In[41]:
+# In[38]:
 
 
 final_annual_df = final_weekly_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
-final_annual_df['Reach'] = final_annual_df['Reach'] / gam_info['number_of_weeks']
+final_annual_df['Reach'] = final_annual_df['Reach'] / number_of_weeks
 
 final_annual_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_annual_{platformID}.csv", 
                        index=None)
-
-
-# In[ ]:
-
-
-
 

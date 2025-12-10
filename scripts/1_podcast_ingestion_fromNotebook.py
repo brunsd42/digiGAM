@@ -6,7 +6,7 @@
 
 from datetime import datetime
 import pandas as pd
-
+import os 
 from IPython.display import display
 
 
@@ -18,8 +18,13 @@ from IPython.display import display
 import sys
 from pathlib import Path
 
-# Add ../helper to sys.path
-helper_path = Path(__file__).resolve().parent.parent / "helper"
+try:
+    # Works in Python scripts
+    helper_path = Path(__file__).resolve().parent.parent / "helper"
+except NameError:
+    # Works in Jupyter notebooks
+    helper_path = Path().resolve().parent / "helper"
+
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
@@ -37,13 +42,19 @@ country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Co
                               keep_default_na=False)
 
 # week 
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period', index_col=0)
+week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 
 # podcast details
 podcast_details = pd.read_excel(f"../../{gam_info['lookup_file']}", 
                                      sheet_name='Podcast').dropna(how='all')
-podcast_details.sample()
+
+### RUN TESTS
+test_functions.test_lookup_files(country_codes, ['PlaceID'], [0,1,2],
+                                 test_step = "lookup files - ensuring country codes are correct")
+
+test_functions.test_lookup_files(week_tester, ['w/c'], [3,4,5], 
+                                 test_step = "lookup files - ensuring week tester is correct")
 
 
 # ## helper functions
@@ -73,8 +84,11 @@ def execute_sql_query_with_output(sql_query, file_timeinfo, output_filename):
     df = execute_sql_query(sql_query)
     if df is not None:
         print(df.head())
-        
-    df.to_csv(f"../data/raw/podcast/{file_timeinfo}_{output_filename}.csv", index=False)
+
+    
+    file_path = f"../data/raw/podcast"
+    os.makedirs(file_path, exist_ok=True)
+    df.to_csv(f"{file_path}/{file_timeinfo}_{output_filename}.csv", index=False)
     
     return df
 
@@ -95,7 +109,7 @@ sql_query_1 = f"""SELECT
                     vmb.programme_title,
                     COUNT(prd.version_id) AS entry_count
                 FROM 
-                    redshiftdb.podcasts_rss_downloads.podcasting_raw_data prd
+                    {gam_info['podcast_sql_table']} prd
                 INNER JOIN 
                     redshiftdb.prez.scv_vmb vmb 
                     ON prd.version_id = vmb.version_id
@@ -148,7 +162,7 @@ sql_query_2 = f"""
                COUNT(DISTINCT CONCAT(prd.ip, prd.useragent)) AS uniques,
            COUNT(DISTINCT prd.ip) AS old_uniques,
            COUNT(*) AS downloads
-    FROM redshiftdb.podcasts_rss_downloads.podcasting_raw_data prd
+    FROM {gam_info['podcast_sql_table']} prd
     INNER JOIN redshiftdb.prez.scv_vmb vmb 
         ON prd.version_id = vmb.version_id
     WHERE 
@@ -201,7 +215,7 @@ sql_query_3 = f"""
            COUNT(DISTINCT CONCAT(prd.ip, prd.useragent)) AS uniques,
            COUNT(DISTINCT prd.ip) AS old_uniques,
            COUNT(*) AS downloads
-    FROM redshiftdb.podcasts_rss_downloads.podcasting_raw_data prd
+    FROM {gam_info['podcast_sql_table']} prd
     INNER JOIN redshiftdb.prez.scv_vmb vmb 
         ON prd.version_id = vmb.version_id
     WHERE 
@@ -257,7 +271,7 @@ sql_query = f"""
            COUNT(DISTINCT CONCAT(prd.ip, prd.useragent)) AS uniques,
            COUNT(DISTINCT prd.ip) AS old_uniques,
            COUNT(*) AS downloads
-    FROM redshiftdb.podcasts_rss_downloads.podcasting_raw_data prd
+    FROM {gam_info['podcast_sql_table']} prd
     INNER JOIN redshiftdb.prez.scv_vmb vmb 
         ON prd.version_id = vmb.version_id
     WHERE 
@@ -308,7 +322,7 @@ sql_query = f"""
            COUNT(DISTINCT CONCAT(prd.ip, prd.useragent)) AS uniques,
            COUNT(DISTINCT prd.ip) AS old_uniques,
            COUNT(*) AS downloads
-    FROM redshiftdb.podcasts_rss_downloads.podcasting_raw_data prd
+    FROM {gam_info['podcast_sql_table']} prd
     INNER JOIN redshiftdb.prez.scv_vmb vmb 
         ON prd.version_id = vmb.version_id
     WHERE 
