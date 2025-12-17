@@ -1,5 +1,6 @@
 # SAFETY
 helper/security_config.py
+helper/security_config*
 helper/config.py
 
 # FILES
@@ -26,4 +27,4 @@ code/__pycache__
 helper/__pycache__
 notebooks/_archive
 test/**/
-
+venv/
