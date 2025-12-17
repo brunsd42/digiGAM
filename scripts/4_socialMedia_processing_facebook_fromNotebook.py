@@ -248,7 +248,7 @@ data = functions.calculate_aggregated_services(data, stages, platformID, gam_inf
                                                 country_codes, pop_size_col)
 
 
-# In[13]:
+# In[11]:
 
 
 # Combine all 'weekly' DataFrames
@@ -271,6 +271,12 @@ service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_
                                                                metric_col='Reach',
                                                                test_step= test_step, 
                                                                 round_metric=True)
+
+
+# In[12]:
+
+
+combined_weekly[combined_weekly['ServiceID'].isin(['BNI', 'BNO', 'GNL'])]
 
 
 # In[ ]:

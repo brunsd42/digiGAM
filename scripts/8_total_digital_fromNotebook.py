@@ -388,7 +388,7 @@ no_outliers = no_outliers[['PlaceID', 'ServiceID', 'YearGAE', 'w/c',
 
 # ### calculate CSS
 
-# In[45]:
+# In[14]:
 
 
 ws_site_social_postOutlier = pd.concat([outliers, no_outliers])
@@ -795,11 +795,15 @@ os.makedirs(output_dir, exist_ok=True)
 digital_df = digital_df[digital_df['ServiceID'] != 'AXE']
 digital_df.to_csv(f"{output_dir}/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
                        index=None)
+digital_df.to_csv(f"../../../New Lumen 2025/Datasets/Raw/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
+                       index=None)
 
 digital_annual_df = digital_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
 digital_annual_df['Reach'] = digital_annual_df['Reach'] / number_of_weeks
 
 digital_annual_df.to_csv(f"{output_dir}/{gam_info['file_timeinfo']}_digi_gam_annual.csv", 
+                       index=None)
+digital_annual_df.to_csv(f"../../../New Lumen 2025/Datasets/Raw/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
                        index=None)
 
 # ✅ Copy the test logbook into the same folder
@@ -825,13 +829,13 @@ digital_df['PlatformID'].unique()
 digital_df['w/c'].unique()
 
 
-# In[44]:
+# In[40]:
 
 
 len(digital_df['w/c'].unique())
 
 
-# In[42]:
+# In[41]:
 
 
 ax2_ser = [
@@ -845,9 +849,29 @@ digital_df[
 ]
 
 
-# In[41]:
+# In[45]:
 
 
-#SWA 
-#2025-
+digital_df[(digital_df['w/c'] == '2025-12-01')  & 
+    (digital_df['ServiceID'].isin(['BNI', 'BNO', 'GNL']))]['ServiceID'].value_counts()
+
+
+# In[46]:
+
+
+digital_df[(digital_df['w/c'] == '2025-12-01')  & 
+    (digital_df['ServiceID'].isin(['BNI', 'BNO', 'GNL']))]['PlatformID'].value_counts()
+
+
+# In[49]:
+
+
+digital_df[(digital_df['w/c'] == '2025-12-01')  & 
+    (digital_df['ServiceID'].isin(['POL']))]['PlatformID'].value_counts()
+
+
+# In[ ]:
+
+
+
 

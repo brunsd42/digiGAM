@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[7]:
+# In[1]:
 
 
 platformID = 'INS'
 
 
-# In[8]:
+# In[2]:
 
 
 from datetime import datetime
@@ -21,7 +21,7 @@ import psycopg2
 
 # ## import helper 
 
-# In[9]:
+# In[3]:
 
 
 import sys
@@ -39,9 +39,10 @@ sys.path.insert(0, str(helper_path))
 # Now import your modules 
 from config import gam_info
 import test_functions 
+from functions import calculate_rolling_avg_country_split
 
 
-# In[10]:
+# In[4]:
 
 
 # country
@@ -69,7 +70,7 @@ test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platf
 
 # # ingest 
 
-# In[11]:
+# In[5]:
 
 
 engagements = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_engagements_final.csv",)
@@ -79,7 +80,7 @@ engagements['Channel ID'] = engagements['Channel ID'].dropna().apply(lambda x: s
 engagements.sample()
 
 
-# In[12]:
+# In[6]:
 
 
 engagements[(engagements['ServiceID'] == 'PER') & 
@@ -88,25 +89,27 @@ engagements[(engagements['ServiceID'] == 'PER') &
     ]#['uv_by_country'].sum()
 
 
-# In[13]:
+# In[7]:
 
 
 country = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_geog.csv",
                      keep_default_na=False)
 country['w/c'] = pd.to_datetime(country['w/c'])
+country['PlatformID'] = platformID
 country['Channel ID'] = country['Channel ID'].dropna().apply(lambda x: str(int(x)))
 country.sample()
 
 
-# In[14]:
+# In[8]:
 
 
 country_annual_avg = country.groupby(['Channel ID', 'Channel Name', 'PlaceID'])['country_%'].mean().reset_index()
+#country_annual_avg = calculate_rolling_avg_country_split(country, metric_col='country_%')
 
 
 # # combine 
 
-# In[15]:
+# In[9]:
 
 
 combined = engagements.merge(country, on=["Channel ID", "w/c"], how='left', indicator=True)
@@ -134,7 +137,7 @@ cols = ['Channel ID', 'Channel Name', 'IG Handle',
 temp = temp[cols]
 
 
-# In[16]:
+# In[10]:
 
 
 cols = ['Channel ID', 'Channel Name', 'IG Handle', 
@@ -143,7 +146,7 @@ engagement_country = pd.concat([combined_inner, temp])[cols].rename(columns={'IG
 
 
 
-# In[17]:
+# In[11]:
 
 
 to_clean_country = country_codes[['PlaceID', 'YT-_FBE_codes', gam_info['population_column']]]
@@ -157,7 +160,7 @@ final_ig_data['country_%'] = final_ig_data['country_%'].fillna(0)
 final_ig_data['uv_by_country'] = final_ig_data['engaged_reach'] * final_ig_data['country_%']
 
 
-# In[18]:
+# In[12]:
 
 
 final_ig_data[(final_ig_data['ServiceID'] == 'PER') & 
@@ -167,7 +170,7 @@ final_ig_data[(final_ig_data['ServiceID'] == 'PER') &
 
 # # store 
 
-# In[19]:
+# In[13]:
 
 
 print(final_ig_data.shape)

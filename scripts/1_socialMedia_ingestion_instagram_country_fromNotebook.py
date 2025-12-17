@@ -74,7 +74,7 @@ test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platf
 
 # # ingestion
 
-# In[15]:
+# In[5]:
 
 
 # keep country code where clause - the other rows are for age & gender in diff cols
@@ -102,9 +102,9 @@ sql_query = f"""
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country_redshift_extract.csv"
 
-df = execute_sql_query(sql_query)
-df['page_id'] = df['page_id'].astype(str) 
-df.to_csv(file, index=False, na_rep='')
+#df = execute_sql_query(sql_query)
+#df['page_id'] = df['page_id'].astype(str) 
+#df.to_csv(file, index=False, na_rep='')
 
 ig_userCountry_raw = pd.read_csv(file, keep_default_na=False)
 
@@ -180,7 +180,7 @@ ig_userCountry = ig_userCountry.merge(country_codes[['YT-_FBE_codes', 'PlaceID']
                                           how='left').drop(columns=['YT-_FBE_codes'])
 
 
-# In[26]:
+# In[8]:
 
 
 # currently sql table has duplicates
@@ -191,7 +191,7 @@ test_functions.test_duplicates(ig_userCountry, ['Channel ID', 'w/c', 'PlaceID'],
                                test_step='dropped duplicates past processing')
 
 
-# In[30]:
+# In[9]:
 
 
 grouped_df = ig_userCountry.groupby(['Channel ID', 'Channel Name', 
@@ -220,7 +220,7 @@ test_functions.test_percentage(ig_country_df,
                                test_step='summing country % per week & account')
 
 
-# In[31]:
+# In[10]:
 
 
 file_path = f"../data/processed/{platformID}"

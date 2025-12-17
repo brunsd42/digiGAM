@@ -96,8 +96,8 @@ sql_query = f"""
     ;
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_activity_redshift_extract.csv"
-df = execute_sql_query(sql_query)
-df.to_csv(file, index=False, na_rep='')
+#df = execute_sql_query(sql_query)
+#df.to_csv(file, index=False, na_rep='')
 
 twitter_activity_raw = pd.read_csv(file, keep_default_na=False)
 twitter_activity_raw['account_id'] = twitter_activity_raw['account_id'].apply(lambda x: str(int(x)))

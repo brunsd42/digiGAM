@@ -119,8 +119,8 @@ sql_query = f"""
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country_redshift_extract.csv"
 
-df = execute_sql_query(sql_query)    
-df.to_csv(file, index=False, na_rep='')
+#df = execute_sql_query(sql_query)    
+#df.to_csv(file, index=False, na_rep='')
 
 yt_views_raw = pd.read_csv(file, keep_default_na=False)
 yt_views_raw['week_commencing'] = pd.to_datetime(yt_views_raw['week_commencing'])

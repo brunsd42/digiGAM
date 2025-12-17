@@ -108,9 +108,9 @@ sql_query = f"""
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_activity_redshift_extract.csv"
 
-df = execute_sql_query(sql_query)
-df['ig_user_id'] = df['ig_user_id'].astype(str) 
-df.to_csv(file, index=False, na_rep='')
+#df = execute_sql_query(sql_query)
+#df['ig_user_id'] = df['ig_user_id'].astype(str) 
+#df.to_csv(file, index=False, na_rep='')
 
 ig_views_raw = pd.read_csv(file, keep_default_na=False)
 ig_views_raw['ig_user_id'] = ig_views_raw['ig_user_id'].astype(str) 

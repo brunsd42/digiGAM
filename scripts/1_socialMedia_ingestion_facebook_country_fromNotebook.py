@@ -59,7 +59,7 @@ dtype_dict = {'Channel ID': 'str',
 socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
                                      sheet_name='Social Media Accounts new')
 
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
+#socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
 socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
 socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
@@ -95,9 +95,9 @@ sql_query = f"""
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country_redshift_extract.csv"
 
-df = execute_sql_query(sql_query)
-df['page_id'] = df['page_id'].astype(str)
-df.to_csv(file, index=False, na_rep='')
+#df = execute_sql_query(sql_query)
+#df['page_id'] = df['page_id'].astype(str)
+#df.to_csv(file, index=False, na_rep='')
 
 facebook_country_raw = pd.read_csv(file, keep_default_na=False)
 
@@ -189,10 +189,11 @@ compare_or_update_reference(facebook_country[cols],
 '''
 
 
-# In[ ]:
+# In[9]:
 
 
-
+facebook_country[(facebook_country['w/c'] == '2025-11-24')  & 
+    (facebook_country['Channel ID'].isin(['630866223444617']))]
 
 
 # In[ ]:

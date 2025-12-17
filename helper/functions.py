@@ -112,6 +112,53 @@ def execute_sql_query(sql_query):
 
 ################################ single platform calculations
 
+import pandas as pd
+
+def calculate_rolling_avg_country_split(df, metric_col='rescaled_percentage', min_week=None, max_week=None):
+    """
+    For each channel and place, generate a full Monday calendar from min_week to max_week (inclusive),
+    and compute the prev-4-week rolling average (shifted by 1) for every week, even if missing in original data.
+    The metric column contains the country split (% per country).
+    """
+    # Convert dates
+    min_week = pd.to_datetime(min_week)
+    max_week = pd.to_datetime(max_week)
+
+    # Ensure w/c is datetime and sort
+    df = df.copy()
+    df['w/c'] = pd.to_datetime(df['w/c'])
+    df = df.sort_values(['Channel ID', 'PlaceID', 'w/c'])
+    df = df.groupby(['Channel ID', 'PlaceID', 'w/c'])[metric_col].sum().reset_index()
+
+    # Full Monday calendar
+    calendar = pd.date_range(start=min_week, end=max_week, freq='7D')
+
+    results = []
+
+    for (ch, place), grp in df.groupby(['Channel ID', 'PlaceID']):
+        # Reindex to full calendar
+        grp = grp.set_index('w/c').reindex(calendar)
+        grp.index.name = 'w/c'
+
+        # Compute rolling average of last 4 observed weeks (excluding current)
+        grp[metric_col] = (
+            grp[metric_col]
+            .shift(1)
+            .rolling(window=4, min_periods=1)
+            .mean()
+        )
+
+        # Add identifiers
+        grp['Channel ID'] = ch
+        grp['PlaceID'] = place
+
+        results.append(grp[['Channel ID', 'PlaceID', metric_col]].reset_index())
+
+    # Combine all
+    result = pd.concat(results, ignore_index=True)
+    return result[['Channel ID', 'PlaceID', 'w/c', metric_col]]
+
+
 def gnl_expander(df):
     """
     Duplicate rows where ServiceID == 'GNL' into two rows with ServiceID 'BNI' and 'BNO'.

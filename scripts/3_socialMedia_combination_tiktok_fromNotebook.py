@@ -6,8 +6,6 @@
 
 from IPython.display import display 
 
-
-
 import base64
 import json
 import requests
@@ -47,7 +45,7 @@ sys.path.insert(0, str(helper_path))
 from config import gam_info
 
 from security_config import emplifi_key
-from functions import execute_sql_query, gnl_expander
+from functions import calculate_rolling_avg_country_split, gnl_expander
 import test_functions
 import functions 
 
@@ -380,21 +378,15 @@ views_scaled['engaged_users'] = views_scaled['final_video_views']/(views_scaled[
 views_scaled.columns
 
 
-# In[16]:
-
-
-views_scaled['w/c'].sort_values().unique()
-
-
 # # Country 
 
-# In[17]:
+# In[16]:
 
 
 country_df = post_level_df.copy()
 
 
-# In[18]:
+# In[17]:
 
 
 # Step 1: Parse the stringified list of country-percentage dictionaries
@@ -419,7 +411,7 @@ exploded_df['country'] = exploded_df['country'].replace('Others', 'ZZ')
 exploded_df['country'] = exploded_df['country'].fillna('ZZ')
 
 
-# In[19]:
+# In[18]:
 
 
 exploded_df = exploded_df.rename(columns={'country': 'TikTok Codes'})
@@ -448,13 +440,10 @@ ttk_country.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_
                   index=None, na_rep='')
 
 
-# In[20]:
+# In[19]:
 
 
-import numpy as np
-import pandas as pd
-
-# 0) Weekly mean per channel/place (your step)
+# Weekly mean per channel/place to get to a rolling channel / coutnry split average
 ttk_country_avg_channel = (
     ttk_country
     .groupby(['Channel ID', 'w/c', 'PlaceID', 'PlatformID'])['rescaled_percentage']
@@ -462,93 +451,9 @@ ttk_country_avg_channel = (
     .reset_index()
 )
 
-# 1) Ensure datetime and sort
-ttk_country_avg_channel['w/c'] = pd.to_datetime(ttk_country_avg_channel['w/c'])
-ttk_country_avg_channel = ttk_country_avg_channel.sort_values(['Channel ID', 'PlaceID', 'w/c']).copy()
+weekly_with_imputed_last = calculate_rolling_avg_country_split(ttk_country_avg_channel)
 
-# 2) Compute prev-4-week rolling average per (Channel ID, PlaceID)
-ttk_country_avg_channel['prev4wk_avg'] = (
-    ttk_country_avg_channel
-    .groupby(['Channel ID', 'PlaceID'], sort=False)['rescaled_percentage']
-    .transform(lambda s: s.shift(1).rolling(window=4, min_periods=1).mean())
-)
 
-# 3) For each channel, create the missing "last week" (next calendar week) and impute per PlaceID
-imputed_rows = []
-
-# Choose your week anchor to match 'w/c' (e.g., W-MON if w/c is Monday)
-week_freq = 'W-MON'  # change to 'W-SUN' etc. if needed
-
-for ch, ch_grp in ttk_country_avg_channel.groupby('Channel ID'):
-    ch_grp = ch_grp.sort_values('w/c').copy()
-    if ch_grp.empty:
-        continue
-
-    # Latest known week for this channel
-    last_week = ch_grp['w/c'].max()
-
-    # Compute the next week date aligned to your anchor
-    # If your w/c values are already Mondays, next week is last_week + 7 days.
-    # Alternatively, use date_range to get the next anchor precisely:
-    next_week = (pd.date_range(start=last_week, periods=2, freq=week_freq)[-1])
-
-    # If next_week already exists in data for this channel, skip
-    if ((ch_grp['w/c'] == next_week).any()):
-        continue
-
-    # Build per-place imputation for the missing week using prev4wk_avg
-    places = ch_grp['PlaceID'].unique()
-    platform_id = ch_grp['PlatformID'].dropna().iloc[0] if not ch_grp['PlatformID'].dropna().empty else np.nan
-
-    # Collect prev4wk_avg per place from the latest rows in the channel history
-    # We take the most recent available prev4wk_avg for each place.
-    rows_for_week = []
-    for place in places:
-        place_grp = ch_grp[ch_grp['PlaceID'] == place].copy()
-        # The prev4wk_avg is already computed per row; pick the last non-NaN value
-        val = place_grp['prev4wk_avg'].dropna().iloc[-1] if not place_grp['prev4wk_avg'].dropna().empty else np.nan
-        rows_for_week.append({'Channel ID': ch, 'PlaceID': place, 'PlatformID': platform_id,
-                              'w/c': next_week, 'imputed_share': val})
-
-    imputed_df = pd.DataFrame(rows_for_week)
-
-    # If all places are NaN (no history at all), assign a uniform split
-    if imputed_df['imputed_share'].isna().all():
-        imputed_df['imputed_share'] = 1.0 / len(imputed_df)
-    else:
-        # Normalize so sums to 1 across places for that channel-week
-        total = imputed_df['imputed_share'].sum(skipna=True)
-        if pd.isna(total) or total == 0:
-            # If total is 0 or NaN after partial NaNs, use uniform
-            imputed_df['imputed_share'] = 1.0 / len(imputed_df)
-        else:
-            # For any NaNs, set to 0 before normalization (optional: or fill with channel-place median)
-            imputed_df['imputed_share'] = imputed_df['imputed_share'].fillna(0)
-            imputed_df['imputed_share'] = imputed_df['imputed_share'] / imputed_df['imputed_share'].sum()
-
-    # Finalize column names to match your dataset
-    imputed_df = imputed_df.rename(columns={'imputed_share': 'rescaled_percentage'})
-    imputed_rows.append(imputed_df)
-
-# 4) Append imputed "last week" rows (if any) to the weekly dataset
-if imputed_rows:
-    imputed_last_weeks = pd.concat(imputed_rows, ignore_index=True)
-else:
-    imputed_last_weeks = pd.DataFrame(columns=['Channel ID', 'PlaceID', 'PlatformID', 'w/c', 'rescaled_percentage'])
-
-# Optional: flag these rows
-imputed_last_weeks['is_imputed'] = True
-
-# 5) Combine: keep original observed weeks + the newly imputed last weeks
-weekly_with_imputed_last = pd.concat([ttk_country_avg_channel[['Channel ID','PlaceID','PlatformID','w/c','rescaled_percentage']].assign(is_imputed=False),
-                                      imputed_last_weeks],
-                                     ignore_index=True)
-
-# 6) (Optional) save
-# weekly_with_imputed_last.to_csv(
-#     f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country_weekly_with_last_week_imputed.csv",
-#     index=False
-# )
 weekly_with_imputed_last[weekly_with_imputed_last['is_imputed'] == True]
 
 
@@ -558,13 +463,13 @@ weekly_with_imputed_last[weekly_with_imputed_last['is_imputed'] == True]
 # As the average is larger than 1 the country view is rebased 
 # 
 
-# In[21]:
+# In[20]:
 
 
 ttk_country.columns
 
 
-# In[22]:
+# In[21]:
 
 
 # 1. Convert week column to datetime
@@ -633,7 +538,7 @@ combined_data = combined_data.merge(country_codes[['PlaceID', gam_info['populati
                                     on=['PlaceID'], how='left')
 
 
-# In[23]:
+# In[22]:
 
 
 # 10. Apply Sainsbury formula for country-level views
@@ -664,7 +569,7 @@ dedupli_df = pd.concat(deduplicated_datasets)
         
 
 
-# In[24]:
+# In[23]:
 
 
 # 11. Aggregate to profile level (country-specific)
@@ -705,7 +610,7 @@ ttk_df['uv_by_country'] = (
 )
 
 
-# In[25]:
+# In[24]:
 
 
 print(ttk_df.shape)
@@ -717,16 +622,22 @@ ttk_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}
                      index=None)
 
 
-# In[31]:
+# In[25]:
 
 
 ttk_df[ttk_df['w/c'] == '2025-12-01']['ServiceID'].unique()
 
 
-# In[30]:
+# In[26]:
 
 
 ttk_df[ttk_df['w/c'] == '2025-11-24']['ServiceID'].unique()
+
+
+# In[27]:
+
+
+ttk_df['w/c'].sort_values().unique()
 
 
 # In[ ]:

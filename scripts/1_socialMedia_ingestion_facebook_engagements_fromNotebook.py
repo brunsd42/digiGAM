@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[9]:
+# In[1]:
 
 
 from datetime import datetime
@@ -54,7 +54,7 @@ dtype_dict = {'Channel ID': 'str',
 socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
                                      sheet_name='Social Media Accounts new')
 
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
+# socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
 socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
 socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
 socialmedia_accounts['Channel ID'] = socialmedia_accounts['Channel ID'].dropna().apply(lambda x: str(int(x)))
@@ -103,9 +103,9 @@ sql_query = f"""
 
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_engagements_redshift_extract.csv"
 
-df = execute_sql_query(sql_query)
-df['page_id'] = df['page_id'].astype(str)
-df.to_csv(file, index=False, na_rep='')
+#df = execute_sql_query(sql_query)
+#df['page_id'] = df['page_id'].astype(str)
+#df.to_csv(file, index=False, na_rep='')
 
 facebook_engagements_raw = pd.read_csv(file, keep_default_na=False)
 facebook_engagements_raw['page_id'] = facebook_engagements_raw['page_id'].astype(str)
@@ -157,7 +157,7 @@ test_functions.test_inner_join(facebook_engagements_raw, socialmedia_accounts,
                                focus='left')
 
 
-# In[11]:
+# In[7]:
 
 
 file_path = f"../data/processed/{platformID}"
@@ -166,6 +166,19 @@ os.makedirs(file_path, exist_ok=True)
 cols = ['Channel ID', 'ServiceID', 'w/c', 'engaged_reach']
 facebook_engagements[cols].to_csv(f"{file_path}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv",
                                        index=None)
+
+
+# In[8]:
+
+
+facebook_engagements[facebook_engagements['ServiceID'].isin(['BNI', 'BNO', 'GNL'])]
+
+
+# In[10]:
+
+
+facebook_engagements[(facebook_engagements['w/c'] == '2025-12-01')  & 
+    (facebook_engagements['Channel ID'].isin(['630866223444617']))]
 
 
 # In[ ]:

@@ -52,7 +52,7 @@ sys.path.insert(0, str(helper_path))
 # Now import your modules 
 from config import gam_info
 
-from functions import execute_sql_query
+from functions import calculate_rolling_avg_country_split
 import test_functions
 
 
@@ -102,9 +102,15 @@ facebook_engagements_reach['w/c'] = pd.to_datetime(facebook_engagements_reach['w
 facebook_engagements_reach['Channel ID'] = facebook_engagements_reach['Channel ID'].apply(lambda x: str(int(x)))
 
 
+# In[6]:
+
+
+facebook_engagements_reach.head()
+
+
 # # Country
 
-# In[6]:
+# In[7]:
 
 
 country_raw = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_COUNTRY.csv")
@@ -114,30 +120,19 @@ country_raw['Channel ID'] = country_raw['Channel ID'].apply(lambda x: str(int(x)
 
 cols = ['Channel ID', 'Channel Name', 'w/c', 'PlaceID', 'country_%']
 country_df = country_raw[cols]
+country_df['PlatformID'] = platformID
 country_df.head()
 
 
-# In[7]:
-
-
-# get 
-country_lastYear = pd.read_excel(f"../data/stale/2024_FBE_Engagements_Country.xlsx", 
-                                 sheet_name='Weekly FB Country USE')
-country_lastYear = country_lastYear.rename(columns={
-    'FB Page ID': 'Channel ID', 
-    'Country Code': 'YT-_FBE_codes', 
-    'country %': 'country_%'
-})
-country_lastYear['Channel ID'] = country_lastYear['Channel ID'].apply(lambda x: str(int(x)))
-
-country_lastYear = country_lastYear.merge(country_codes[['YT-_FBE_codes', 'PlaceID']], on=['YT-_FBE_codes'], how='left', 
-                                          indicator=True)
-print(country_lastYear._merge.value_counts())
-country_lastYear['PlaceID'] = country_lastYear['PlaceID'].fillna('UNK')
-avg_country_df = country_lastYear.groupby(['Channel ID', 'PlaceID'])['country_%'].mean().reset_index()
-
-
 # In[8]:
+
+
+avg_country_df = calculate_rolling_avg_country_split(country_df, metric_col='country_%')
+
+
+# # combine engagements & country
+
+# In[9]:
 
 
 reach_df_raw = facebook_engagements_reach.merge(country_df, on=['Channel ID', 'w/c'], how='outer', 
@@ -147,12 +142,12 @@ reach_df_left = reach_df_raw[reach_df_raw['_merge'] == 'left_only'].drop(columns
 reach_df_inner = reach_df_raw[reach_df_raw['_merge'] == 'both'].drop(columns=['_merge'])
 
 reach_df_avg = reach_df_left[facebook_engagements_reach.columns].merge(avg_country_df, 
-                                    on=['Channel ID'], how='left', indicator=True)
+                                    on=['Channel ID', 'w/c'], how='left', indicator=True)
 
 reach_df = pd.concat([reach_df_inner, reach_df_avg])
 
 
-# In[9]:
+# In[10]:
 
 
 metric_col = ['country_%', 'engaged_reach']
@@ -170,6 +165,31 @@ print(reach_df.shape)
 cols = ['ServiceID', 'Channel ID', 'w/c', 'PlaceID', 'uv_by_country']
 reach_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv", 
                      index=None)
+
+
+# In[11]:
+
+
+reach_df.head()
+
+
+# In[12]:
+
+
+reach_df[reach_df['ServiceID'].isin(['BNI', 'BNO', 'GNL'])]
+
+
+# In[13]:
+
+
+reach_df[(reach_df['w/c'] == '2025-12-01')  & 
+    (reach_df['Channel ID'].isin(['630866223444617']))]
+
+
+# In[14]:
+
+
+avg_country_df[avg_country_df['Channel ID'].isin(['630866223444617'])]
 
 
 # In[ ]:
