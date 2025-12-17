@@ -603,7 +603,11 @@ def update_logbook(test_number, issues_list, test='', test_step=''):
     missing_weeks (pd.DataFrame): DataFrame containing missing weeks information.
     """
     print('...updating logbook...\n')
-    logbook_path = "../test/test_logbook.xlsx"
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    file_path = f"../test/issue_lists_{today_date}"
+    os.makedirs(file_path, exist_ok=True)
+
+    logbook_path = f"{file_path}/test_logbook.xlsx"
 
     # ✅ If logbook does not exist, create it with headers
     if not os.path.exists(logbook_path):
@@ -637,11 +641,8 @@ def update_logbook(test_number, issues_list, test='', test_step=''):
         
     if not issues_list.empty:
         
-        today_date = datetime.now().strftime('%Y-%m-%d')
-        file_path = f"../test/issue_lists_{today_date}"
         file_name = f"/{test_number}_issue_list.csv"
-        os.makedirs(file_path, exist_ok=True)
-
+        
         issues_df = pd.DataFrame(issues_list)
         if 'Channel ID' in issues_df.columns:
             social_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype={'Channel ID': 'str'},
