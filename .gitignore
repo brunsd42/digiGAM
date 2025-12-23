@@ -9,6 +9,7 @@ code/.ipynb_checkpoints
 helper/.ipynb_checkpoints
 notebooks/.ipynb_checkpoints
 scripts/.ipynb_checkpoints
+test/wsc_calculation_details.csv
 
 # Ignore all CSV and Excel files in the data folder
 data/**/*.csv
