@@ -14,7 +14,7 @@ import missingno as msno
 import urllib.parse
 
 import security_config
-
+import test_functions
     
 ################### PIANO
 def convert_url_to_query(url, start, end):
@@ -110,9 +110,67 @@ def execute_sql_query(sql_query):
         cursor.close()
         conn.close()
 
-################################ single platform calculations
+######################## lookup file
+def lookup_loader(gam_info, platformID, with_country=False, country_col=''):
+    # week 
+    week_cols = ['w/c']
+    week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
+                                sheet_name='GAM Period')
+    week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
+    
+    today = pd.Timestamp.today().normalize()
+    last_monday = today - pd.Timedelta(days=(today.weekday() % 7))
+    week_tester = week_tester[week_tester['w/c'] < last_monday]
 
-import pandas as pd
+    test_functions.test_lookup_files(week_tester, ['w/c'], 
+                                     [f"{platformID}_1c_0", 
+                                      f"{platformID}_1c_1", 
+                                      f"{platformID}_1c_2"], 
+                                     test_step = "lookup files - ensuring week tester is correct")
+    # social media accoutns
+    channel_cols=['Channel ID']
+    dtype_dict = {'Channel ID': 'str',
+                  'Linked FB Account': 'str'}
+    socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}",
+                                         dtype=dtype_dict,
+                                         sheet_name='Social Media Accounts new')
+    
+    socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
+    socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
+    socialmedia_accounts['Channel ID'] = platformID + socialmedia_accounts['Channel ID']
+    socialmedia_accounts['Start'] = pd.to_datetime(socialmedia_accounts['Start'], 
+                                                   errors='coerce', dayfirst=True)
+    socialmedia_accounts['End'] = pd.to_datetime(socialmedia_accounts['End'], 
+                                                   errors='coerce', dayfirst=True)
+    test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], 
+                                     [f"{platformID}_1c_3", 
+                                      f"{platformID}_1c_4", 
+                                      f"{platformID}_1c_5"],
+                                     test_step = "lookup files - ensuring social media accounts is correct")
+    
+    # country
+    if with_country:
+        country_cols = [country_col, 'PlaceID']
+        country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}",
+                                      sheet_name='CountryID',
+                                      keep_default_na=False)[country_cols]
+        
+        test_functions.test_lookup_files(country_codes, country_cols, 
+                                         [f"{platformID}_1c_6", 
+                                          f"{platformID}_1c_7", 
+                                          f"{platformID}_1c_8"],
+                                         test_step="lookup files - ensuring country codes is correct")
+        return {'week_tester': week_tester,
+                'socialmedia_accounts': socialmedia_accounts,
+                'country_codes': country_codes,
+               }
+    else:
+        return {'week_tester': week_tester,
+                'socialmedia_accounts': socialmedia_accounts,
+               }
+
+
+################################ single platform calculations
 
 def calculate_rolling_avg_country_split(df, metric_col='rescaled_percentage', min_week=None, max_week=None):
     """

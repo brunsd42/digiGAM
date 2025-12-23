@@ -28,6 +28,17 @@ sys.path.insert(0, str(helper_path))
 
 from config import gam_info
 #########
+def test_lookup_files(df, id_columns, test_numbers, test_step):
+    
+    # returns entries
+    test_empty(df, test_numbers[0], test_step=test_step, name='lookup')
+    
+    # unique keys 
+    test_duplicates(df, id_columns, test_numbers[1], test_step=test_step)
+    
+    # missing values
+    test_missing(df, id_columns, test_numbers[2], test_step=test_step, name='lookup')
+
 
 # Test to check if all filter elements were returned
 def test_filter_elements_returned(df, filter_elements, column_name, test_number, test_step=''):
@@ -44,54 +55,134 @@ def test_filter_elements_returned(df, filter_elements, column_name, test_number,
     
     update_logbook(test_number=test_number, issues_list= issues_df, 
                    test_step=test_step, test='testing missing elements in columns')
-    
 
-def test_weeks_presence_per_account_old(key, id_column, main_data, week_lookup, test_number, test_step=''):
+def test_weeks_presence_per_account(
+    key: str,
+    main_data: pd.DataFrame,
+    week_lookup: pd.DataFrame,
+    channel_lookup: pd.DataFrame,
+    test_number,
+    test_step: str = ''
+):
     """
-    Check if all completed weeks from the week lookup are present for each account in the main dataset.
+    Report missing weeks per Channel ID, only from each channel's Start date onward.
 
-    Parameters:
-    key (str): Column name for the week information.
-    id_column (str): Column name for the account ID.
-    main_data (pd.DataFrame): Main dataset containing account-week data.
-    week_lookup (pd.DataFrame): DataFrame containing expected weeks.
-    test_number (str): Unique test identifier.
-    test_step (str): Optional description of the test step.
+    Parameters
+    ----------
+    key : str
+        Week column name (e.g., 'Week Ending', 'Week Start', etc.). Prefer date-like.
+    main_data : pd.DataFrame
+        Must contain ['Channel ID', key] with actual observed weeks.
+    week_lookup : pd.DataFrame
+        Must contain [key] listing all canonical weeks.
+    channel_lookup : pd.DataFrame
+        Must contain ['Channel ID', 'Start'] indicating when each channel began.
+    test_number : any
+        Identifier passed through to update_logbook.
+    test_step : str
+        A label to append to the logbook.
 
-    Returns:
-    pd.DataFrame: Missing account-week combinations if any.
+    Returns
+    -------
+    pd.DataFrame
+        Missing rows for (Channel ID, key) where key >= Start.
     """
-    # Ensure datetime consistency
-    main_data[key] = pd.to_datetime(main_data[key])
-    week_lookup[key] = pd.to_datetime(week_lookup[key])
 
-    # Filter weeks to only include those fully completed (Monday last week or earlier)
+    # --- Defensive copies
+    main_test_data = main_data.copy()
+    week_lookup_test_data = week_lookup.copy()
+    start_dates = channel_lookup.copy()
+
     today = pd.Timestamp.today().normalize()
-    last_monday = today - pd.Timedelta(days=today.weekday() + 7)  # Monday of last week
-    completed_weeks = week_lookup[week_lookup[key] <= last_monday]
+    # --- Validate schema
+    for df_name, df, cols in [
+        ('main_data', main_test_data, ['Channel ID', key]),
+        ('week_lookup', week_lookup_test_data, [key]),
+        ('channel_lookup', start_dates, ['Channel ID', 'Start', 'End']),
+    ]:
+        missing_cols = [c for c in cols if c not in df.columns]
+        if missing_cols:
+            raise ValueError(f"{df_name} is missing required columns: {missing_cols}")
 
-    # Create expected combinations using cartesian product
-    expected_pairs = pd.MultiIndex.from_product(
-        [main_data[id_column].unique(), completed_weeks[key].unique()],
-        names=[id_column, key]
-    )
+    # --- Normalize IDs (prevent dtype mismatches)
+    main_test_data['Channel ID'] = main_test_data['Channel ID'].astype(str).str.strip()
+    start_dates['Channel ID'] = start_dates['Channel ID'].astype(str).str.strip()
 
-    # Actual combinations from main data
-    actual_pairs = pd.MultiIndex.from_frame(main_data[[id_column, key]])
-
-    # Find missing pairs
-    missing_pairs = expected_pairs.difference(actual_pairs)
-
-    # Convert to DataFrame for logging
-    if missing_pairs.empty:
-        print(f"✅ Test {test_number} passed: All completed weeks present for each account.")
-        missing_df = pd.DataFrame()
+    # --- Harmonize types (dates)
+    if key != 'Week Number':
+        # Robust parsing; works for '13.8.2025' and similar; set dayfirst=True for EU formats
+        main_test_data[key] = pd.to_datetime(main_test_data[key], errors='coerce', dayfirst=True)
+        week_lookup_test_data[key] = pd.to_datetime(week_lookup_test_data[key], errors='coerce', dayfirst=True)
     else:
-        print(f"❌ Test {test_number} failed: Missing completed weeks detected.")
-        missing_df = pd.DataFrame(missing_pairs.to_frame(index=False))
+        # Numeric week numbers require a start_week field
+        main_test_data[key] = pd.to_numeric(main_test_data[key], errors='coerce')
+        week_lookup_test_data[key] = pd.to_numeric(week_lookup_test_data[key], errors='coerce')
+        if 'start_week' not in start_dates.columns:
+            raise ValueError("When key == 'Week Number', channel_lookup must include 'start_week'.")
 
-    # Log results
-    update_logbook(test_number, missing_df, test='Weeks presence per account', test_step=test_step)
+    # --- Drop unparseable rows
+    main_test_data = main_test_data.dropna(subset=[key])
+    week_lookup_test_data = week_lookup_test_data.dropna(subset=[key])
+    start_dates = start_dates.dropna(subset=['Start'] if key != 'Week Number' else ['start_week'])
+
+    # --- Optional: restrict to last fully completed week (avoids partial-current-week noise)
+    if key != 'Week Number':
+        last_monday_prev_week = today - pd.Timedelta(days=today.weekday() + 7)  # Monday of last week
+        week_lookup_test_data = week_lookup_test_data[week_lookup_test_data[key] <= last_monday_prev_week]
+    # If using week numbers, define your numeric cutoff logic similarly.
+
+    # --- De-duplicate and keep only necessary columns
+    main_existing = main_test_data[['Channel ID', key]].drop_duplicates()
+    week_lookup_test_data = week_lookup_test_data[[key]].drop_duplicates()
+    start_dates = start_dates[['Channel ID', 'Start', 'End'] + (['start_week'] if key == 'Week Number' else [])].drop_duplicates()
+
+    # --- Build expected (Channel ID × week) only for weeks >= Start
+    start_dates['_tmp'] = 1
+    week_lookup_test_data['_tmp'] = 1
+    expected = start_dates.merge(week_lookup_test_data, on='_tmp', how='inner').drop(columns=['_tmp'])
+
+    if key != 'Week Number':
+        expected = expected[expected[key] >= expected['Start']]
+    else:
+        expected = expected[expected[key] >= expected['start_week']]
+
+    expected = expected[['Channel ID', key, 'End'] + (['Start'] if key != 'Week Number' else ['start_week'])].drop_duplicates()
+
+    # --- Anti-join: expected minus actual
+    missing = expected.merge(
+        main_existing,
+        on=['Channel ID', key],
+        how='left',
+        indicator=True
+    )
+    missing = missing[missing['w/c'] > missing['Start']]
+    missing = missing[missing['w/c'] < missing['End']]
+    
+    missing = (
+        missing[missing['_merge'] == 'left_only']
+        .drop(columns=['_merge'])
+        .sort_values(['Channel ID', key])
+    ).sort_values(by='w/c')[['Start', 'End', 'Channel ID', 'w/c']]
+
+    # --- Output
+    if missing.empty:
+        print("✅ No missing weeks from each channel’s Start onward.")
+    else:
+        print("❌ Missing weeks from Start onward:")
+        print(missing)
+
+        summary = (
+            missing.groupby('Channel ID')[key]
+            .nunique()
+            .reset_index(name='missing_week_count')
+            .sort_values('missing_week_count', ascending=False)
+        )
+        print("\nSummary of missing weeks per Channel ID:")
+        print(summary)
+
+    update_logbook(test_number, missing, 'missing weeks by channel since Start', test_step)
+    return missing
+
 
 def test_inner_join(df_left, df_right, key, test_number, test_step='', focus='both'):
     resulting_df = df_left[key].merge(df_right[key], on=key, how='outer', indicator=True, 
@@ -228,16 +319,6 @@ def test_missing(df, columns, test_number, test_step='', name='lookup'):
 
     update_logbook(test_number, issues_df, test=f"Testing missing values in {name}", test_step=test_step)
     
-def test_lookup_files(df, id_columns, test_numbers, test_step):
-    
-    # returns entries
-    test_empty(df, test_numbers[0], test_step=test_step, name='lookup')
-    
-    # unique keys 
-    test_duplicates(df, id_columns, test_numbers[1], test_step=test_step)
-    
-    # missing values
-    test_missing(df, id_columns, test_numbers[2], test_step=test_step, name='lookup')
 
 #############################################################################################################
 # test same values
@@ -479,175 +560,6 @@ def test_same_values(df1, df2, key, test_col, test_number, test_step=''):
         print("✅ Pass - No larger than 1 values")
     update_logbook(test_number, issues_df, 'testing that the summing between different steps is correct', test_step)
 
-
-
-
-import pandas as pd
-
-def test_weeks_presence_per_account(
-    key: str,
-    main_data: pd.DataFrame,
-    week_lookup: pd.DataFrame,
-    channel_lookup: pd.DataFrame,
-    test_number,
-    test_step: str = ''
-):
-    """
-    Report missing weeks per Channel ID, only from each channel's Start date onward.
-
-    Parameters
-    ----------
-    key : str
-        Week column name (e.g., 'Week Ending', 'Week Start', etc.). Prefer date-like.
-    main_data : pd.DataFrame
-        Must contain ['Channel ID', key] with actual observed weeks.
-    week_lookup : pd.DataFrame
-        Must contain [key] listing all canonical weeks.
-    channel_lookup : pd.DataFrame
-        Must contain ['Channel ID', 'Start'] indicating when each channel began.
-    test_number : any
-        Identifier passed through to update_logbook.
-    test_step : str
-        A label to append to the logbook.
-
-    Returns
-    -------
-    pd.DataFrame
-        Missing rows for (Channel ID, key) where key >= Start.
-    """
-
-    # --- Defensive copies
-    main_test_data = main_data.copy()
-    week_lookup_test_data = week_lookup.copy()
-    start_dates = channel_lookup.copy()
-
-    today = pd.Timestamp.today().normalize()
-    # --- Validate schema
-    for df_name, df, cols in [
-        ('main_data', main_test_data, ['Channel ID', key]),
-        ('week_lookup', week_lookup_test_data, [key]),
-        ('channel_lookup', start_dates, ['Channel ID', 'Start', 'End']),
-    ]:
-        missing_cols = [c for c in cols if c not in df.columns]
-        if missing_cols:
-            raise ValueError(f"{df_name} is missing required columns: {missing_cols}")
-
-    # --- Normalize IDs (prevent dtype mismatches)
-    main_test_data['Channel ID'] = main_test_data['Channel ID'].astype(str).str.strip()
-    start_dates['Channel ID'] = start_dates['Channel ID'].astype(str).str.strip()
-
-    # --- Harmonize types (dates)
-    if key != 'Week Number':
-        # Robust parsing; works for '13.8.2025' and similar; set dayfirst=True for EU formats
-        main_test_data[key] = pd.to_datetime(main_test_data[key], errors='coerce', dayfirst=True)
-        week_lookup_test_data[key] = pd.to_datetime(week_lookup_test_data[key], errors='coerce', dayfirst=True)
-        start_dates['Start'] = pd.to_datetime(start_dates['Start'], errors='coerce', dayfirst=True)
-        start_dates['End'] = pd.to_datetime(start_dates['End'].fillna(today), errors='coerce', dayfirst=True)
-    else:
-        # Numeric week numbers require a start_week field
-        main_test_data[key] = pd.to_numeric(main_test_data[key], errors='coerce')
-        week_lookup_test_data[key] = pd.to_numeric(week_lookup_test_data[key], errors='coerce')
-        if 'start_week' not in start_dates.columns:
-            raise ValueError("When key == 'Week Number', channel_lookup must include 'start_week'.")
-
-    # --- Drop unparseable rows
-    main_test_data = main_test_data.dropna(subset=[key])
-    week_lookup_test_data = week_lookup_test_data.dropna(subset=[key])
-    start_dates = start_dates.dropna(subset=['Start'] if key != 'Week Number' else ['start_week'])
-
-    # --- Optional: restrict to last fully completed week (avoids partial-current-week noise)
-    if key != 'Week Number':
-        last_monday_prev_week = today - pd.Timedelta(days=today.weekday() + 7)  # Monday of last week
-        week_lookup_test_data = week_lookup_test_data[week_lookup_test_data[key] <= last_monday_prev_week]
-    # If using week numbers, define your numeric cutoff logic similarly.
-
-    # --- De-duplicate and keep only necessary columns
-    main_existing = main_test_data[['Channel ID', key]].drop_duplicates()
-    week_lookup_test_data = week_lookup_test_data[[key]].drop_duplicates()
-    start_dates = start_dates[['Channel ID', 'Start', 'End'] + (['start_week'] if key == 'Week Number' else [])].drop_duplicates()
-
-    # --- Build expected (Channel ID × week) only for weeks >= Start
-    start_dates['_tmp'] = 1
-    week_lookup_test_data['_tmp'] = 1
-    expected = start_dates.merge(week_lookup_test_data, on='_tmp', how='inner').drop(columns=['_tmp'])
-
-    if key != 'Week Number':
-        expected = expected[expected[key] >= expected['Start']]
-    else:
-        expected = expected[expected[key] >= expected['start_week']]
-
-    expected = expected[['Channel ID', key, 'End'] + (['Start'] if key != 'Week Number' else ['start_week'])].drop_duplicates()
-
-    # --- Anti-join: expected minus actual
-    missing = expected.merge(
-        main_existing,
-        on=['Channel ID', key],
-        how='left',
-        indicator=True
-    )
-    missing = missing[missing['w/c'] > missing['Start']]
-    missing = missing[missing['w/c'] < missing['End']]
-    
-    missing = (
-        missing[missing['_merge'] == 'left_only']
-        .drop(columns=['_merge'])
-        .sort_values(['Channel ID', key])
-    ).sort_values(by='w/c')[['Start', 'End', 'Channel ID', 'w/c']]
-
-    # --- Output
-    if missing.empty:
-        print("✅ No missing weeks from each channel’s Start onward.")
-    else:
-        print("❌ Missing weeks from Start onward:")
-        print(missing)
-
-        summary = (
-            missing.groupby('Channel ID')[key]
-            .nunique()
-            .reset_index(name='missing_week_count')
-            .sort_values('missing_week_count', ascending=False)
-        )
-        print("\nSummary of missing weeks per Channel ID:")
-        print(summary)
-
-    update_logbook(test_number, missing, 'missing weeks by channel since Start', test_step)
-    return missing
-
-
-
-def test_weeks_presence(key, main_data, week_lookup, test_number, test_step=''):
-    """
-    Function to check if all weeks from the week lookup dataframe are present in the main dataset.
-
-    Parameters:
-    week_lookup (pd.DataFrame): DataFrame containing week lookup information.
-    main_data (pd.DataFrame): DataFrame containing the main dataset.
-
-    Returns:
-    pd.DataFrame: DataFrame containing missing weeks if any, otherwise an empty DataFrame.
-    """
-    # make copies
-    main_test_data = main_data.copy()
-    week_lookup_test_data = week_lookup.copy()
-    
-    
-    if key != 'Week Number':
-        # ensure both are in the same dtype
-        main_data[key] = pd.to_datetime(main_data[key])
-        week_lookup[key] = pd.to_datetime(week_lookup[key])
-    
-    # Perform the join operation
-    merged_data = pd.merge(main_test_data, week_lookup_test_data, on=key, how='inner')
-
-    # Check for missing weeks
-    missing_weeks = week_lookup_test_data[~week_lookup_test_data[key].isin(merged_data[key])]
-
-    if missing_weeks.empty:
-        print("✅ All weeks are present in the dataset.")
-    else:
-        print("❌ Missing weeks:")
-        print(missing_weeks)
-    update_logbook(test_number, missing_weeks, 'all weeks in dataset', test_step)
 
 def test_outliers_general(df, numeric_columns, test_number, test_step='', threshold=3):
     """
