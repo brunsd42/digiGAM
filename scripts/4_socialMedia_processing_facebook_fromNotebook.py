@@ -70,7 +70,7 @@ week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", 
                                      sheet_name='Social Media Accounts new')
 
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
+#socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
 socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
 socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
 
@@ -220,12 +220,6 @@ data['GNL']['weekly'] = functions.calculate_weekly_Services(data['GNL_']['weekly
                                                             gam_info) 
 
 
-# In[ ]:
-
-
-
-
-
 # ## AX2, ANW, ANY, TOT, ALL, ENG, EN2 ENW
 # 
 
@@ -248,7 +242,7 @@ data = functions.calculate_aggregated_services(data, stages, platformID, gam_inf
                                                 country_codes, pop_size_col)
 
 
-# In[11]:
+# In[13]:
 
 
 # Combine all 'weekly' DataFrames
@@ -258,12 +252,22 @@ combined_weekly = pd.concat(
     ignore_index=True
 )[cols]
 
+
+# missing weeks per page_id
+test_functions.test_weeks_presence_per_account(key='w/c',
+                                               id_column='ServiceID',
+                                               main_data=combined_weekly,
+                                               week_lookup=week_tester[['w/c']],
+                                               test_number=f"{platformID}_4_9_processing",
+                                               test_step="Check all weeks present for each account")
+
+
 print(combined_weekly.shape)
 combined_weekly.sample()
 combined_weekly['PlatformID'] = platformID
 # SERVICE hierarchy issues
 test_step = "calculated high-level services"
-service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_9", 
+service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_10_processing", 
                                                                'Service', 
                                                                gam_info, 
                                                                combined_weekly, 
@@ -273,14 +277,8 @@ service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_
                                                                 round_metric=True)
 
 
-# In[12]:
-
-
-combined_weekly[combined_weekly['ServiceID'].isin(['BNI', 'BNO', 'GNL'])]
-
-
 # In[ ]:
 
 
-
+combined_weekly[(combined_weekly['w/c'] == '')]
 

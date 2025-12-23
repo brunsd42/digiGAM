@@ -102,13 +102,23 @@ sql_query = f"""
 """
 
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_engagements_redshift_extract.csv"
-
-#df = execute_sql_query(sql_query)
-#df['page_id'] = df['page_id'].astype(str)
-#df.to_csv(file, index=False, na_rep='')
-
+df = execute_sql_query(sql_query)
+df['page_id'] = df['page_id'].astype(str)
+df.to_csv(file, index=False, na_rep='')
+'''try: 
+    df = execute_sql_query(sql_query)
+    df['page_id'] = df['page_id'].astype(str)
+    df.to_csv(file, index=False, na_rep='')
+except:
+    print("no redshift connection using last time queried")
+'''    
 facebook_engagements_raw = pd.read_csv(file, keep_default_na=False)
 facebook_engagements_raw['page_id'] = facebook_engagements_raw['page_id'].astype(str)
+
+
+# In[6]:
+
+
 facebook_engagements_raw['week_commencing'] = pd.to_datetime(facebook_engagements_raw['week_commencing'])
 facebook_engagements_raw = facebook_engagements_raw.rename(columns={'page_id': 'Channel ID', 
                                                                     'week_commencing': 'w/c'})
@@ -145,7 +155,7 @@ test_functions.test_duplicates(facebook_engagements_raw,
 
 # ## processing engagements
 
-# In[6]:
+# In[7]:
 
 
 facebook_engagements = facebook_engagements_raw.merge(socialmedia_accounts[['Channel ID', 'ServiceID']], 
@@ -157,7 +167,7 @@ test_functions.test_inner_join(facebook_engagements_raw, socialmedia_accounts,
                                focus='left')
 
 
-# In[7]:
+# In[8]:
 
 
 file_path = f"../data/processed/{platformID}"
@@ -168,21 +178,15 @@ facebook_engagements[cols].to_csv(f"{file_path}/{gam_info['file_timeinfo']}_{pla
                                        index=None)
 
 
-# In[8]:
+# In[9]:
 
 
-facebook_engagements[facebook_engagements['ServiceID'].isin(['BNI', 'BNO', 'GNL'])]
+facebook_engagements[(facebook_engagements['w/c'] == '2025-12-01')  & 
+    (facebook_engagements['Channel ID'].isin(['1296222730434431']))]
 
 
 # In[10]:
 
 
-facebook_engagements[(facebook_engagements['w/c'] == '2025-12-01')  & 
-    (facebook_engagements['Channel ID'].isin(['630866223444617']))]
-
-
-# In[ ]:
-
-
-
+#['1296222730434431' '143048895744759' '1526071940947174' '237647452933504''151955124848859']
 

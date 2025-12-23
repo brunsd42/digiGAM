@@ -77,19 +77,11 @@ engagements = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timei
                                              
 engagements['w/c'] = pd.to_datetime(engagements['w/c'])
 engagements['Channel ID'] = engagements['Channel ID'].dropna().apply(lambda x: str(int(x)))
-engagements.sample()
+engagements = engagements.dropna(subset=['ServiceID'])
+engagements.sort_values(by='w/c')['w/c'].unique()
 
 
 # In[6]:
-
-
-engagements[(engagements['ServiceID'] == 'PER') & 
-    (engagements['w/c'] == '2025-05-05') 
-    #& (engagements['PlaceID'] == 'IRN')
-    ]#['uv_by_country'].sum()
-
-
-# In[7]:
 
 
 country = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_geog.csv",
@@ -100,25 +92,27 @@ country['Channel ID'] = country['Channel ID'].dropna().apply(lambda x: str(int(x
 country.sample()
 
 
-# In[8]:
+# In[7]:
 
 
-country_annual_avg = country.groupby(['Channel ID', 'Channel Name', 'PlaceID'])['country_%'].mean().reset_index()
-#country_annual_avg = calculate_rolling_avg_country_split(country, metric_col='country_%')
+country_annual_avg = calculate_rolling_avg_country_split(country, 'country_%',
+                                                         country['w/c'].min(), country['w/c'].max())
 
 
 # # combine 
 
-# In[9]:
+# In[8]:
 
 
 combined = engagements.merge(country, on=["Channel ID", "w/c"], how='left', indicator=True)
+print(f"Initial merge mismatches:\n{combined._merge.value_counts()}")
 combined_inner = combined[combined['_merge'] == 'both'].drop(columns='_merge')
 combined_left = combined[combined['_merge'] == 'left_only'].drop(columns='_merge')
 
-left_matched = combined_left.merge(country_annual_avg, on="Channel ID", how='left', indicator=True)
-
-cols_to_clean = ['Channel Name', 'PlaceID', 'country_%',]
+left_matched = combined_left[engagements.columns].merge(country_annual_avg, on=["Channel ID", "w/c"], 
+                                                        how='left', indicator=True)
+print(f"Country second merge mismatches:\n{left_matched._merge.value_counts()}")
+'''cols_to_clean = ['Channel Name', 'PlaceID', 'country_%',]
 for col in cols_to_clean:
     left_matched[f"{col}"] = left_matched[f"{col}_x"].fillna(left_matched[f"{col}_y"])
     left_matched = left_matched.drop(columns=[f"{col}_x", f"{col}_y"])
@@ -129,24 +123,26 @@ missing_country_perc = pd.read_excel("../data/stale/missing ig countries.xlsx")
 missing_country_perc['country code'] = missing_country_perc['country code'].str.upper()
 missing_country_perc.rename(columns={'country code': 'PlaceID', 'Total': 'country_%'})
 temp = temp.merge(missing_country_perc, on='IG Handle', how='inner')
-cols = ['Channel ID', 'Channel Name', 'IG Handle', 
+'''
+
+cols = ['Channel ID', 'Channel Name', 
         'w/c', 'ServiceID',
         'plays', 'impressions',
         '30 view', 'IG Modelled Factor', 
         'PlaceID', 'engaged_reach', 'country_%']
-temp = temp[cols]
+temp = pd.concat([combined_inner, left_matched])[cols]
 
 
-# In[10]:
+# In[9]:
 
 
-cols = ['Channel ID', 'Channel Name', 'IG Handle', 
+cols = ['Channel ID', 'Channel Name', 
        'w/c', 'ServiceID',  'plays',  'PlaceID', 'engaged_reach', 'country_%']
 engagement_country = pd.concat([combined_inner, temp])[cols].rename(columns={'IG Engaged Persian Exception': 'IG Engaged Users'})
 
 
 
-# In[11]:
+# In[10]:
 
 
 to_clean_country = country_codes[['PlaceID', 'YT-_FBE_codes', gam_info['population_column']]]
@@ -160,17 +156,9 @@ final_ig_data['country_%'] = final_ig_data['country_%'].fillna(0)
 final_ig_data['uv_by_country'] = final_ig_data['engaged_reach'] * final_ig_data['country_%']
 
 
-# In[12]:
-
-
-final_ig_data[(final_ig_data['ServiceID'] == 'PER') & 
-    (final_ig_data['w/c'] == '2025-05-05') & 
-    (final_ig_data['PlaceID'] == 'IRN')]#['uv_by_country'].sum()
-
-
 # # store 
 
-# In[13]:
+# In[11]:
 
 
 print(final_ig_data.shape)

@@ -6,6 +6,7 @@
 
 from IPython.display import display 
 
+from datetime import datetime
 
 import pandas as pd 
 import missingno as msno
@@ -541,8 +542,10 @@ def compute_combined_reach(df, services, label, pop_size_col, country_codes, dea
     ).reset_index().fillna(0)
 
     if calc_type == 'add':
+        print("... using summation")
         pivot_df['Reach'] = pivot_df[services].sum(axis=1)
     elif calc_type == 'sainsbury':
+        print("... using sainsbury")
         pivot_df = functions.sainsbury_formula(pivot_df, pop_size_col, services, 
                                                'Reach', deal_with_zero=deal_with_zero)
         
@@ -691,9 +694,7 @@ final_annual_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_an
                        index=None)
 
 
-# # combine platforms
-# 
-# ## import data
+# # WT-
 
 # In[30]:
 
@@ -704,25 +705,90 @@ cols = ['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
 # In[31]:
 
 
+css_df = final_weekly_df.copy()[cols]
+css_df['w/c'] = css_df['w/c'].dt.strftime('%Y-%m-%d')
+
+
+# In[32]:
+
+
+podcast_df = pd.read_excel(f"../data/singlePlatform/podcast/weekly/{gam_info['file_timeinfo']}_podcast_data_weekly.xlsx")
+podcast_df['YearGAE'] = gam_info['YearGAE']
+podcast_df['w/c'] = podcast_df['w/c'].dt.strftime('%Y-%m-%d')
+podcast_df = podcast_df[cols]
+pod_df=podcast_df[podcast_df['PlatformID'].isin(['POD'])]
+pod_df.head()
+
+
+# In[33]:
+
+
+wt_pod_df = pd.concat([css_df[cols], pod_df[cols]])
+
+wt_pod_df=pd.DataFrame(wt_pod_df.pivot_table(index=['ServiceID','PlaceID', 'w/c', 'YearGAE'],
+                                     columns='PlatformID', 
+                                     values='Reach',
+                                     aggfunc='sum')).reset_index()
+wt_pod_df=wt_pod_df.merge(country_codes[['PlaceID', gam_info['population_column']]], 
+                          on='PlaceID', how='left')
+wt_pod_df=wt_pod_df.fillna(0)
+wt_pod_df.head()
+
+
+# In[34]:
+
+
+wt_pod_df = functions.sainsbury_formula(wt_pod_df, gam_info['population_column'],
+                                                 ['CSS', 'POD'], 'Reach')
+wt_pod_df['PlatformID'] = 'WT-'
+wt_pod_df[(wt_pod_df['POD'] > 1) & (wt_pod_df['CSS'] > 1)].head()
+
+
+# In[35]:
+
+
+wt_pod_df[cols].to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_WT-.csv", 
+                       index=None)
+wt_pod_df_annual = wt_pod_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()
+wt_pod_df_annual['Reach'] = wt_pod_df_annual['Reach'] / number_of_weeks
+
+wt_pod_df_annual.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_annual_CSS.csv", 
+                       index=None)
+
+
+# # combine platforms
+# 
+# ## import data
+
+# In[36]:
+
+
+cols = ['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
+
+
+# In[ ]:
+
+
 podcast_df = pd.read_excel(f"../data/singlePlatform/podcast/weekly/{gam_info['file_timeinfo']}_podcast_data_weekly.xlsx")
 podcast_df['YearGAE'] = gam_info['YearGAE']
 podcast_df['w/c'] = podcast_df['w/c'].dt.strftime('%Y-%m-%d')
 podcast_df = podcast_df[cols]
 
 
-# In[32]:
+# In[ ]:
 
 
 try:
     site_df = pd.read_csv(f"../data/singlePlatform/site/weekly/{gam_info['file_timeinfo']}_site_reach_weekly.csv", index_col=0)
     site_df = site_df[cols]
+    site_df['w/c'] = site_df['w/c'].dt.strftime('%Y-%m-%d')
     site_df.head()
 except:
     print('site not there! ')
     site_df = pd.DataFrame()
 
 
-# In[33]:
+# In[ ]:
 
 
 # created from platform in 6.
@@ -732,43 +798,49 @@ social_wsc_df = social_wsc_df.rename(columns={
     'Platform Code': 'PlatformID',
     'Service Code': 'ServiceID'
 })
+social_wsc_df['w/c'] = pd.to_datetime(social_wsc_df['w/c']).dt.strftime('%Y-%m-%d')
 social_wsc_df['YearGAE'] = gam_info['YearGAE']
 social_wsc_df = social_wsc_df[cols]
 social_wsc_df.head()
 
 
-# In[34]:
+# In[ ]:
 
 
 # created from dataset per platform file in 5.
 social_platforms_df = pd.read_csv(f"../data/combinePlatforms/social_media_data_{gam_info['file_timeinfo']}_platform_weekly.csv")
 social_platforms_df['YearGAE'] = gam_info['YearGAE']
+social_platforms_df['w/c'] = pd.to_datetime(social_platforms_df['w/c']).dt.strftime('%Y-%m-%d')
 social_platforms_df = social_platforms_df[cols]
 social_platforms_df.head()
 
 
-# In[35]:
-
-
-social_platforms_df['PlatformID'].unique()
-
-
-# In[36]:
+# In[ ]:
 
 
 css_df = pd.read_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_CSS.csv")[cols]
+css_df['w/c'] = pd.to_datetime(css_df['w/c']).dt.strftime('%Y-%m-%d')
 css_df.head()
+
+
+# In[ ]:
+
+
+wt_df = pd.read_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_WT-.csv")[cols]
+wt_df['w/c'] = pd.to_datetime(wt_df['w/c']).dt.strftime('%Y-%m-%d')
+wt_df.head()
 
 
 # # combine 
 
-# In[37]:
+# In[ ]:
 
 
 sources = {'pod': podcast_df, 
-           'site': site_df, 
+           'site': site_weekly_df, 
            'platform': social_platforms_df, 
            'wsc': social_wsc_df,
+           'wt-': wt_df,
            'css': css_df}
 
 def far_per_test(df):
@@ -792,6 +864,8 @@ digital_df = pd.concat(sources.values())
 output_dir = "../data/final"
 os.makedirs(output_dir, exist_ok=True)
 
+digital_df['w/c'] = pd.to_datetime(digital_df['w/c']).dt.strftime('%Y-%m-%d')
+digital_df = digital_df[digital_df['w/c'] < '2025-12-15']
 digital_df = digital_df[digital_df['ServiceID'] != 'AXE']
 digital_df.to_csv(f"{output_dir}/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
                        index=None)
@@ -803,11 +877,13 @@ digital_annual_df['Reach'] = digital_annual_df['Reach'] / number_of_weeks
 
 digital_annual_df.to_csv(f"{output_dir}/{gam_info['file_timeinfo']}_digi_gam_annual.csv", 
                        index=None)
-digital_annual_df.to_csv(f"../../../New Lumen 2025/Datasets/Raw/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
+digital_annual_df.to_csv(f"../../../New Lumen 2025/Datasets/Raw/{gam_info['file_timeinfo']}_digi_gam_annual.csv", 
                        index=None)
 
 # ✅ Copy the test logbook into the same folder
-logbook_src = "../test/test_logbook.xlsx"
+today_date = datetime.now().strftime('%Y-%m-%d')
+file_path = f"../test/issue_lists_{today_date}"
+logbook_src = f"{file_path}/test_logbook.xlsx"
 logbook_dest = f"{output_dir}/{gam_info['file_timeinfo']}_test_logbook.xlsx"
 
 if os.path.exists(logbook_src):
@@ -817,57 +893,22 @@ else:
     print("Warning: Test logbook not found!")
 
 
-# In[38]:
+# In[ ]:
+
+
+# add a test - for all platform services and weeks is there a gap? 
+
+
+# In[ ]:
+
+
+digital_df[digital_df['w/c'] == '2025-12-08']['PlatformID'].unique()
+
+
+# In[ ]:
 
 
 digital_df['PlatformID'].unique()
-
-
-# In[39]:
-
-
-digital_df['w/c'].unique()
-
-
-# In[40]:
-
-
-len(digital_df['w/c'].unique())
-
-
-# In[41]:
-
-
-ax2_ser = [
-    'AFA','AMH','ARA','AZE','BEN','BUR','DAR','ECH','ELT','PER','FRE','GUJ','HAU','HIN','IGB','INO',
-    'KOR','KRW','KYR','MAN','MAR','NEP','PAS','PDG','POR','PUN','RUS','SER','SIN','SOM','SPA','SWA',
-    'TAM','TEL','THA','TIG','TUR','UKR','URD','UZB','VIE','YOR', 'FOA', 'UKPS'
-]
-digital_df[
-    (digital_df['PlatformID'].isin(['YT-', 'WSC'])) 
-    & (digital_df['w/c'] == '2025-11-24')
-]
-
-
-# In[45]:
-
-
-digital_df[(digital_df['w/c'] == '2025-12-01')  & 
-    (digital_df['ServiceID'].isin(['BNI', 'BNO', 'GNL']))]['ServiceID'].value_counts()
-
-
-# In[46]:
-
-
-digital_df[(digital_df['w/c'] == '2025-12-01')  & 
-    (digital_df['ServiceID'].isin(['BNI', 'BNO', 'GNL']))]['PlatformID'].value_counts()
-
-
-# In[49]:
-
-
-digital_df[(digital_df['w/c'] == '2025-12-01')  & 
-    (digital_df['ServiceID'].isin(['POL']))]['PlatformID'].value_counts()
 
 
 # In[ ]:

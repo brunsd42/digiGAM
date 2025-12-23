@@ -102,15 +102,9 @@ facebook_engagements_reach['w/c'] = pd.to_datetime(facebook_engagements_reach['w
 facebook_engagements_reach['Channel ID'] = facebook_engagements_reach['Channel ID'].apply(lambda x: str(int(x)))
 
 
-# In[6]:
-
-
-facebook_engagements_reach.head()
-
-
 # # Country
 
-# In[7]:
+# In[6]:
 
 
 country_raw = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_COUNTRY.csv")
@@ -124,15 +118,16 @@ country_df['PlatformID'] = platformID
 country_df.head()
 
 
-# In[8]:
+# In[7]:
 
 
-avg_country_df = calculate_rolling_avg_country_split(country_df, metric_col='country_%')
+avg_country_df = calculate_rolling_avg_country_split(country_df, 'country_%', 
+                                                     country_raw['w/c'].min(), country_raw['w/c'].max())
 
 
 # # combine engagements & country
 
-# In[9]:
+# In[8]:
 
 
 reach_df_raw = facebook_engagements_reach.merge(country_df, on=['Channel ID', 'w/c'], how='outer', 
@@ -147,7 +142,7 @@ reach_df_avg = reach_df_left[facebook_engagements_reach.columns].merge(avg_count
 reach_df = pd.concat([reach_df_inner, reach_df_avg])
 
 
-# In[10]:
+# In[9]:
 
 
 metric_col = ['country_%', 'engaged_reach']
@@ -155,6 +150,7 @@ for col in metric_col:
     reach_df[col] = reach_df[col].fillna(0)
     
 reach_df['uv_by_country'] = reach_df['country_%'] * reach_df['engaged_reach']
+reach_df = reach_df[reach_df['uv_by_country'] > 0]
 # TODO investigate why there should be duplicates here
 reach_df = reach_df.drop_duplicates()
 
@@ -162,38 +158,23 @@ print(reach_df.shape)
 reach_df = reach_df.dropna(subset='uv_by_country')
 print(reach_df.shape)
 
-cols = ['ServiceID', 'Channel ID', 'w/c', 'PlaceID', 'uv_by_country']
-reach_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv", 
-                     index=None)
+
+# In[10]:
+
+
+# missing weeks per page_id
+test_functions.test_weeks_presence_per_account(key='w/c',
+                                               id_column='Channel ID',
+                                               main_data=reach_df,
+                                               week_lookup=week_tester[['w/c']],
+                                               test_number=f"{platformID}_3_9_combination",
+                                               test_step="Check all weeks present for each account")
 
 
 # In[11]:
 
 
-reach_df.head()
-
-
-# In[12]:
-
-
-reach_df[reach_df['ServiceID'].isin(['BNI', 'BNO', 'GNL'])]
-
-
-# In[13]:
-
-
-reach_df[(reach_df['w/c'] == '2025-12-01')  & 
-    (reach_df['Channel ID'].isin(['630866223444617']))]
-
-
-# In[14]:
-
-
-avg_country_df[avg_country_df['Channel ID'].isin(['630866223444617'])]
-
-
-# In[ ]:
-
-
-
+cols = ['ServiceID', 'Channel ID', 'w/c', 'PlaceID', 'uv_by_country']
+reach_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv", 
+                     index=None)
 

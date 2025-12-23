@@ -118,10 +118,16 @@ sql_query = f"""
     ;
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country_redshift_extract.csv"
-
-#df = execute_sql_query(sql_query)    
-#df.to_csv(file, index=False, na_rep='')
-
+df = execute_sql_query(sql_query)
+df['channel_id'] = df['channel_id'].astype(str)
+df.to_csv(file, index=False, na_rep='')
+'''try: 
+    df = execute_sql_query(sql_query)
+    df['channel_id'] = df['channel_id'].astype(str)
+    df.to_csv(file, index=False, na_rep='')
+except:
+    print("no redshift connection using last time queried")
+'''
 yt_views_raw = pd.read_csv(file, keep_default_na=False)
 yt_views_raw['week_commencing'] = pd.to_datetime(yt_views_raw['week_commencing'])
 yt_views_raw['country_code'] = yt_views_raw['country_code'].replace('', 'ZZ')

@@ -101,10 +101,16 @@ sql_query = f"""
         ;
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country_redshift_extract.csv"
-
-#df = execute_sql_query(sql_query)
-#df['page_id'] = df['page_id'].astype(str) 
-#df.to_csv(file, index=False, na_rep='')
+df = execute_sql_query(sql_query)
+df['page_id'] = df['page_id'].astype(str)
+df.to_csv(file, index=False, na_rep='')
+'''try: 
+    df = execute_sql_query(sql_query)
+    df['page_id'] = df['page_id'].astype(str)
+    df.to_csv(file, index=False, na_rep='')
+except:
+    print("no redshift connection using last time queried")
+'''
 
 ig_userCountry_raw = pd.read_csv(file, keep_default_na=False)
 

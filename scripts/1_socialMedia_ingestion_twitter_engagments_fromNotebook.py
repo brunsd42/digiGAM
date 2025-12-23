@@ -96,9 +96,18 @@ sql_query = f"""
     ;
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_activity_redshift_extract.csv"
-#df = execute_sql_query(sql_query)
-#df.to_csv(file, index=False, na_rep='')
 
+df = execute_sql_query(sql_query)
+df['account_id'] = df['account_id'].astype(str)
+df.to_csv(file, index=False, na_rep='')
+'''
+try: 
+    df = execute_sql_query(sql_query)
+    df['account_id'] = df['account_id'].astype(str)
+    df.to_csv(file, index=False, na_rep='')
+except:
+    print("no redshift connection using last time queried")
+'''
 twitter_activity_raw = pd.read_csv(file, keep_default_na=False)
 twitter_activity_raw['account_id'] = twitter_activity_raw['account_id'].apply(lambda x: str(int(x)))
 twitter_activity_raw['week_commencing'] = pd.to_datetime(twitter_activity_raw['week_commencing'])
@@ -133,7 +142,7 @@ test_functions.test_duplicates(twitter_activity, ['Channel ID', 'w/c'],
                                test_step='Check no duplicates from redshift returned')
 
 
-# In[8]:
+# In[6]:
 
 
 file_path = f"../data/processed/{platformID}"

@@ -373,8 +373,10 @@ views_per_viewer_by_service = yt_views_per_viewer.groupby(['ServiceID'])['views_
 matched_sec = unmatched.merge(views_per_viewer_by_service, on='ServiceID', how='left', indicator=True)
 matched_sec = matched_sec[matched_sec['_merge'] == 'both'].drop(columns='_merge')
 
-views_scaled = pd.concat([matched, matched_sec])
+views_scaled = pd.concat([matched, matched_sec]).dropna(subset=['final_video_views'])
+views_scaled = views_scaled[views_scaled['final_video_views'] > 0]
 views_scaled['engaged_users'] = views_scaled['final_video_views']/(views_scaled['views_per_viewer']*1.14)
+
 views_scaled.columns
 
 
@@ -451,10 +453,9 @@ ttk_country_avg_channel = (
     .reset_index()
 )
 
-weekly_with_imputed_last = calculate_rolling_avg_country_split(ttk_country_avg_channel)
+avg_country_df = calculate_rolling_avg_country_split(ttk_country_avg_channel, 'rescaled_percentage',
+                                                     ttk_country['w/c'].min(), ttk_country['w/c'].max())
 
-
-weekly_with_imputed_last[weekly_with_imputed_last['is_imputed'] == True]
 
 
 # # combine views & country
@@ -464,12 +465,6 @@ weekly_with_imputed_last[weekly_with_imputed_last['is_imputed'] == True]
 # 
 
 # In[20]:
-
-
-ttk_country.columns
-
-
-# In[21]:
 
 
 # 1. Convert week column to datetime
@@ -491,12 +486,13 @@ print(f"Initial merge mismatches:\n{merged_initial._merge.value_counts()}")
 # deal with country
 unmatched_country = merged_initial[merged_initial['_merge'] == 'left_only']
 # for each channel / w/c combination I want the country average of the previous 4 weeks to be the fill in for the missing data
-merged_country_avg = weekly_with_imputed_last[['w/c', 'Channel ID', 'PlaceID', 'rescaled_percentage']].merge(unmatched_country[views_scaled.columns],
+merged_country_avg = avg_country_df[['w/c', 'Channel ID', 'PlaceID', 'rescaled_percentage']].merge(unmatched_country[views_scaled.columns],
     on=['Channel ID', 'w/c'],
     how='outer',
     indicator=True
 )
 print(f"Country second merge mismatches:\n{merged_country_avg._merge.value_counts()}")
+# left only is fine these are weeky percentages in weeks that don't have uv data
 
 # 4. Identify unmatched rows (right_only - country only)
 unmatched_views = merged_initial[merged_initial['_merge'] == 'right_only']
@@ -536,6 +532,12 @@ combined_data['country_views_video_level'] = (
 # 9. add population column 
 combined_data = combined_data.merge(country_codes[['PlaceID', gam_info['population_column']]],
                                     on=['PlaceID'], how='left')
+
+
+# In[21]:
+
+
+merged_country_avg[merged_country_avg['_merge'] == 'left_only']
 
 
 # In[22]:

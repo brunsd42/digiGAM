@@ -80,16 +80,16 @@ overlap_SocWebOverlap['PlaceID'] = overlap_SocWebOverlap['PlaceID'].replace('MYT
 
 
 ### RUN TESTS
-test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_0", f"{platformID}_1", f"{platformID}_2"], 
+test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_6_0", f"{platformID}_6_1", f"{platformID}_6_2"], 
                                  test_step="lookup files - ensuring country codes is correct")
 
-test_functions.test_lookup_files(week_tester, week_cols, [f"{platformID}_3", f"{platformID}_4", f"{platformID}_5"], 
+test_functions.test_lookup_files(week_tester, week_cols, [f"{platformID}_6_3", f"{platformID}_6_4", f"{platformID}_6_5"], 
                                  test_step = "lookup files - ensuring week tester is correct")
 
-test_functions.test_lookup_files(service_tester, ['ServiceID'], [f"{platformID}_6", f"{platformID}_7", f"{platformID}_8"], 
+test_functions.test_lookup_files(service_tester, ['ServiceID'], [f"{platformID}_6_6", f"{platformID}_6_7", f"{platformID}_6_8"], 
                                  test_step = "lookup files - ensuring social media accounts is correct")
 
-test_functions.test_lookup_files(platform_tester, ['PlatformID'], [f"{platformID}_9", f"{platformID}_10", f"{platformID}_11"], 
+test_functions.test_lookup_files(platform_tester, ['PlatformID'], [f"{platformID}_6_9", f"{platformID}_6_10", f"{platformID}_6_11"], 
                                  test_step = "lookup files - ensuring social media accounts is correct")
 
 
@@ -190,28 +190,28 @@ for platform_id in os.listdir(base_folder):
 singlePlatform_df = pd.concat(singlePlatform_df_list, ignore_index=True)
 
 
-# In[9]:
+# In[7]:
 
 
 test_step = 'reading in all single platform values'
 # test that reach is >=0
 test_functions.test_non_null_and_positive(singlePlatform_df, ['Reach'], 
-                                          test_number=f"12_{platformID}", test_step=test_step)
+                                          test_number=f"{platformID}_6_12", test_step=test_step)
 # test that all the combinations are unique (Service, Country, Week, Platform)
 test_functions.test_duplicates(singlePlatform_df, ['ServiceID', 'PlaceID', 'PlatformID', 'w/c'], 
-                               test_number=f"13_{platformID}", test_step=test_step)
+                               test_number=f"{platformID}_6_13", test_step=test_step)
 # test that all platofrms are there and for each platform all services 
 test_functions.test_filter_elements_returned(singlePlatform_df, service_tester['ServiceID'].unique(), 'ServiceID', 
-                                             test_number=f"14_{platformID}", test_step=test_step)
+                                             test_number=f"{platformID}_6_14", test_step=test_step)
 test_functions.test_filter_elements_returned(singlePlatform_df, country_codes['PlaceID'].unique(), 'PlaceID', 
-                                             test_number=f"15_{platformID}", test_step=test_step)
+                                             test_number=f"{platformID}_6_15", test_step=test_step)
 test_functions.test_filter_elements_returned(singlePlatform_df, platform_tester['PlatformID'].unique(), 'PlatformID', 
-                                             test_number=f"16_{platformID}", test_step=test_step)
+                                             test_number=f"{platformID}_6_16", test_step=test_step)
 test_functions.test_filter_elements_returned(singlePlatform_df, week_tester['w/c'].unique(), 'w/c', 
-                                             test_number=f"17_{platformID}", test_step=test_step)
+                                             test_number=f"{platformID}_6_17", test_step=test_step)
 
 
-# In[10]:
+# In[8]:
 
 
 singlePlatform_df.to_csv(f"../data/combinePlatforms/social_media_data_{gam_info['file_timeinfo']}_platform_weekly.csv")
@@ -221,7 +221,7 @@ singlePlatform_df.to_csv(f"../data/combinePlatforms/social_media_data_{gam_info[
 
 # ## test columns (& remove total )
 
-# In[11]:
+# In[9]:
 
 
 annual_singlePlatform_df = singlePlatform_df.groupby(['PlaceID', 'ServiceID', 'PlatformID'])['Reach'].sum().reset_index()
@@ -246,7 +246,7 @@ annual_singlePlatform_df.to_csv(f"../data/combinePlatforms/social_media_data_{ga
 
 # ## workflow 6
 
-# In[12]:
+# In[10]:
 
 
 full_service_df = pd.crosstab(
@@ -263,7 +263,7 @@ full_service_df.head()
 cols = full_service_df.columns
 
 
-# In[14]:
+# In[11]:
 
 
 '''
@@ -277,7 +277,7 @@ full_service_df[
 
 # ### WSL
 
-# In[15]:
+# In[12]:
 
 
 # remove MA / WOR and agg services 
@@ -310,7 +310,7 @@ for col in platform_cols:
 weekly_ws_df['Max Reach'] = weekly_ws_df[platform_cols].max(axis=1)
 
 
-# In[16]:
+# In[13]:
 
 
 # Step 2: Identify Max Platform
@@ -372,7 +372,7 @@ weekly_ws_df[f'{platformID}2'] = (
 weekly_ws_df.to_csv('../test/wsc_calculation_details.csv', index=None)
 
 
-# In[18]:
+# In[14]:
 
 
 '''weekly_ws_df[
@@ -383,7 +383,7 @@ weekly_ws_df.to_csv('../test/wsc_calculation_details.csv', index=None)
     ]'''
 
 
-# In[23]:
+# In[15]:
 
 
 # Ensure all required columns exist
@@ -416,7 +416,7 @@ weekly_ws_df.head()
 
 # ### MA & Studios
 
-# In[24]:
+# In[16]:
 
 
 ma_wor_df = full_service_df[full_service_df['ServiceID'].isin(['WOR', 'MA-'])]
@@ -436,7 +436,7 @@ weekly_ma_wor_df.head()
 
 # prep the aggregate calculation
 
-# In[25]:
+# In[17]:
 
 
 weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
@@ -444,7 +444,7 @@ weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df])
 
 # ### ENW
 
-# In[26]:
+# In[18]:
 
 
 # Usage
@@ -455,7 +455,7 @@ enw_df.head()
 
 # ### ENG
 
-# In[27]:
+# In[19]:
 
 
 # Usage
@@ -466,7 +466,7 @@ eng_df.head()
 
 # ### EN2
 
-# In[28]:
+# In[20]:
 
 
 en2_services = ['ENG', 'WOR']
@@ -475,7 +475,7 @@ en2_df = compute_combined_reach(pd.concat([weekly_df, eng_df]), en2_services, 'E
 
 # ### AX2
 
-# In[29]:
+# In[21]:
 
 
 cols = ['PlaceID', 'digiGAM_FOA_WT-']
@@ -534,7 +534,7 @@ ax2_df.head()
 
 
 
-# In[30]:
+# In[22]:
 
 
 ax2_df_raw[
@@ -547,7 +547,7 @@ ax2_df_raw[
 
 # ### ANW
 
-# In[31]:
+# In[23]:
 
 
 anw_services = ['AX2', 'WSE']
@@ -557,7 +557,7 @@ anw_df = compute_combined_reach(pd.concat([weekly_df, ax2_df]), anw_services, 'A
 
 # ### ANY
 
-# In[32]:
+# In[24]:
 
 
 any_services = ['ANW', 'GNL']
@@ -567,7 +567,7 @@ any_df = compute_combined_reach(pd.concat([weekly_df, anw_df]), any_services, 'A
 
 # ### TOT
 
-# In[33]:
+# In[25]:
 
 
 tot_services = ['ANY', 'MA-']
@@ -577,7 +577,7 @@ tot_df = compute_combined_reach(pd.concat([weekly_df, any_df]), tot_services, 'T
 
 # ### ALL
 
-# In[34]:
+# In[26]:
 
 
 all_services = ['TOT', 'WOR']
@@ -587,7 +587,7 @@ all_df = compute_combined_reach(pd.concat([weekly_df, tot_df]), all_services, 'A
 
 # ## finalising
 
-# In[35]:
+# In[27]:
 
 
 final_weekly_df = pd.concat([weekly_ws_df, weekly_ma_wor_df, 
@@ -598,7 +598,7 @@ final_weekly_df['PlatformID'] = platformID
 final_weekly_df['YearGAE'] = gam_info['YearGAE']
 
 
-# In[36]:
+# In[28]:
 
 
 # SERVICE hierarchy issues
@@ -629,7 +629,7 @@ platform_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_6
 
 # # store dataset
 
-# In[39]:
+# In[29]:
 
 
 '''ax2_ser = [
@@ -646,14 +646,14 @@ final_weekly_df[
 '''
 
 
-# In[37]:
+# In[30]:
 
 
 final_weekly_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_{platformID}.csv", 
                        index=None)
 
 
-# In[38]:
+# In[31]:
 
 
 final_annual_df = final_weekly_df.groupby(['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID'])['Reach'].sum().reset_index()

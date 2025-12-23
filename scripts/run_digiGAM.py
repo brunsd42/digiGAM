@@ -10,42 +10,42 @@ log_dir.mkdir(parents=True, exist_ok=True)
 # Define groups by platform
 groups = {
     "facebook": [
-        "1_socialMedia_ingestion_facebook_country_fromNotebook.py",
-        "1_socialMedia_ingestion_facebook_engagements_fromNotebook.py",
+        #"1_socialMedia_ingestion_facebook_country_fromNotebook.py",
+        #"1_socialMedia_ingestion_facebook_engagements_fromNotebook.py",
         "3_socialMedia_combination_facebook_fromNotebook.py",
         "4_socialMedia_processing_facebook_fromNotebook.py",
     ],
     "instagram": [
-        "1_socialMedia_ingestion_instagram_country_fromNotebook.py",
-        "1_socialMedia_ingestion_instagram_engagements_fromNotebook.py",
-        "3_socialMedia_combination_instagram_fromNotebook.py",
-        "4_socialMedia_processing_instagram_fromNotebook.py",
+        #"1_socialMedia_ingestion_instagram_country_fromNotebook.py",
+        #"1_socialMedia_ingestion_instagram_engagements_fromNotebook.py",
+        #"3_socialMedia_combination_instagram_fromNotebook.py",
+        #"4_socialMedia_processing_instagram_fromNotebook.py",
     ],
     "twitter": [
-        "1_socialMedia_ingestion_twitter_country_fromNotebook.py",
-        "1_socialMedia_ingestion_twitter_engagments_fromNotebook.py",
-        "3_socialMedia_combination_twitter_fromNotebook.py",
-        "4_socialMedia_processing_twitter_fromNotebook.py",
+        #"1_socialMedia_ingestion_twitter_country_fromNotebook.py",
+        #"1_socialMedia_ingestion_twitter_engagments_fromNotebook.py",
+        #"3_socialMedia_combination_twitter_fromNotebook.py",
+        #"4_socialMedia_processing_twitter_fromNotebook.py",
     ],
     "youtube": [
-        "1_socialMedia_ingestion_youtube_analytics_fromNotebook.py",
-        "1_socialMedia_ingestion_youtube_redshift_fromNotebook.py",
-        "3_socialMedia_combination_youtube_fromNotebook.py",
-        "4_socialMedia_processing_youtube_fromNotebook.py",
+        #"1_socialMedia_ingestion_youtube_analytics_fromNotebook.py",
+        #"1_socialMedia_ingestion_youtube_redshift_fromNotebook.py",
+        #"3_socialMedia_combination_youtube_fromNotebook.py",
+        #"4_socialMedia_processing_youtube_fromNotebook.py",
     ],
     "tiktok": [
         #"1_socialMedia_ingestion_tiktok_fromNotebook.py",
-        "3_socialMedia_combination_tiktok_fromNotebook.py",
-        "4_socialMedia_processing_tiktok_fromNotebook.py",
+        #"3_socialMedia_combination_tiktok_fromNotebook.py",
+        #"4_socialMedia_processing_tiktok_fromNotebook.py",
     ],
     "site": [
-        "1_site_ingestion_fromNotebook.py",
-        "2_site_processing_fromNotebook.py",
-        "3_site_reach_fromNotebook.py"
+        #"1_site_ingestion_fromNotebook.py",
+        #"2_site_processing_fromNotebook.py",
+        #"3_site_reach_fromNotebook.py"
     ],
     "podcast": [
         #"1_podcast_ingestion_fromNotebook.py",
-        "2_podcast_processing_fromNotebook.py"
+        #d"2_podcast_processing_fromNotebook.py"
     ],
     
     #"telegram": [
@@ -62,9 +62,7 @@ final_scripts = [
     "8_total_digital_fromNotebook.py",
 ]
 
-# Track if any group failed
 group_failed = False
-
 # Run each group
 for group_name in groups.keys():
 #for group_name in ['tiktok', 'site']:
@@ -80,6 +78,8 @@ for group_name in groups.keys():
     except subprocess.CalledProcessError:
         print(f"❌ Group '{group_name}' failed. Final scripts will be skipped.")
         group_failed = True
+
+
 
 # Run final scripts only if all groups succeeded
 if not group_failed:

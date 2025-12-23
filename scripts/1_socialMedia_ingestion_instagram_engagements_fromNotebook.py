@@ -41,7 +41,7 @@ from functions import execute_sql_query
 import test_functions 
 
 
-# In[10]:
+# In[4]:
 
 
 # week 
@@ -70,6 +70,18 @@ test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platf
 # # activity
 
 # In[5]:
+
+
+{gam_info['w/c_start']}
+
+
+# In[6]:
+
+
+{gam_info['w/c_end']}
+
+
+# In[7]:
 
 
 sql_query = f"""
@@ -108,10 +120,17 @@ sql_query = f"""
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_activity_redshift_extract.csv"
 
-#df = execute_sql_query(sql_query)
-#df['ig_user_id'] = df['ig_user_id'].astype(str) 
-#df.to_csv(file, index=False, na_rep='')
-
+df = execute_sql_query(sql_query)
+df['ig_user_id'] = df['ig_user_id'].astype(str)
+df.to_csv(file, index=False, na_rep='')
+'''
+try: 
+    df = execute_sql_query(sql_query)
+    df['ig_user_id'] = df['ig_user_id'].astype(str)
+    df.to_csv(file, index=False, na_rep='')
+except:
+    print("no redshift connection using last time queried")
+'''
 ig_views_raw = pd.read_csv(file, keep_default_na=False)
 ig_views_raw['ig_user_id'] = ig_views_raw['ig_user_id'].astype(str) 
 ig_views_raw['week_commencing'] = pd.to_datetime(ig_views_raw['week_commencing'])
@@ -171,7 +190,7 @@ test_functions.test_outliers_vs_reference(ig_views_raw, reference_df,
 
 # ## stale - temporary fix
 
-# In[6]:
+# In[8]:
 
 
 path = "../data/stale/IG Profile Engagement Metrics - Weekly GAM 2026.xlsx"
@@ -193,7 +212,7 @@ ig_views_raw = pd.concat([stale_engagements, ig_views_raw[ig_views_raw['w/c'] >=
                         ignore_index=True)
 
 
-# In[7]:
+# In[9]:
 
 
 # add data different to reference sheet
@@ -201,7 +220,7 @@ ig_views_raw = pd.concat([stale_engagements, ig_views_raw[ig_views_raw['w/c'] >=
 # missing week? replace with value from reference
 
 
-# In[8]:
+# In[10]:
 
 
 ig_views_slim = ig_views_raw.merge(socialmedia_accounts[['Channel ID', 'ServiceID']], 
@@ -218,7 +237,7 @@ plays_factor = pd.read_excel("../data/stale/Instagram - Views to Reels Plays.xls
                     .rename(columns={'IG Page ID': 'Channel ID'})[['Channel ID', 'reels_replay_factor']]
 
 
-# In[13]:
+# In[11]:
 
 
 test_functions.test_inner_join(ig_views_slim, plays_factor,
@@ -269,7 +288,7 @@ ig_views.loc[mask_persian, 'engaged_reach'] = ((ig_views.loc[mask_persian, 'enga
 ig_views['engaged_reach'] = ig_views['engaged_reach'].clip(upper=ig_views['weekly_reach'])
 
 
-# In[14]:
+# In[12]:
 
 
 ig_views[(ig_views['ServiceID'] == 'PER') & 
@@ -278,7 +297,7 @@ ig_views[(ig_views['ServiceID'] == 'PER') &
     ]#['uv_by_country'].sum()
 
 
-# In[15]:
+# In[13]:
 
 
 file_path = f"../data/processed/{platformID}"

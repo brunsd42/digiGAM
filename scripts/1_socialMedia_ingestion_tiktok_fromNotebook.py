@@ -207,7 +207,7 @@ request_count = 0
 
 # Sort weeks from newest to oldest
 for week in week_tester['w/c'].sort_values(ascending=False):
-    
+    print(f"processing {week}")
     for profile_id in tqdm(socialmedia_accounts['Channel ID'].tolist()):
         # Check if we hit the limit
         if request_count >= MAX_CALLS:

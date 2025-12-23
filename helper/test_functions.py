@@ -607,7 +607,7 @@ def update_logbook(test_number, issues_list, test='', test_step=''):
     file_path = f"../test/issue_lists_{today_date}"
     os.makedirs(file_path, exist_ok=True)
 
-    logbook_path = f"{file_path}/test_logbook.xlsx"
+    logbook_path = f"{file_path}/_test_logbook.xlsx"
 
     # ✅ If logbook does not exist, create it with headers
     if not os.path.exists(logbook_path):
