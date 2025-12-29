@@ -58,6 +58,7 @@ def test_filter_elements_returned(df, filter_elements, column_name, test_number,
 
 def test_weeks_presence_per_account(
     key: str,
+    channel_id_col: str,
     main_data: pd.DataFrame,
     week_lookup: pd.DataFrame,
     channel_lookup: pd.DataFrame,
@@ -65,18 +66,18 @@ def test_weeks_presence_per_account(
     test_step: str = ''
 ):
     """
-    Report missing weeks per Channel ID, only from each channel's Start date onward.
+    Report missing weeks per channel_id_col, only from each channel's Start date onward.
 
     Parameters
     ----------
     key : str
         Week column name (e.g., 'Week Ending', 'Week Start', etc.). Prefer date-like.
     main_data : pd.DataFrame
-        Must contain ['Channel ID', key] with actual observed weeks.
+        Must contain [channel_id_col, key] with actual observed weeks.
     week_lookup : pd.DataFrame
         Must contain [key] listing all canonical weeks.
     channel_lookup : pd.DataFrame
-        Must contain ['Channel ID', 'Start'] indicating when each channel began.
+        Must contain [channel_id_col, 'Start'] indicating when each channel began.
     test_number : any
         Identifier passed through to update_logbook.
     test_step : str
@@ -85,7 +86,7 @@ def test_weeks_presence_per_account(
     Returns
     -------
     pd.DataFrame
-        Missing rows for (Channel ID, key) where key >= Start.
+        Missing rows for (channel_id_col, key) where key >= Start.
     """
 
     # --- Defensive copies
@@ -96,17 +97,17 @@ def test_weeks_presence_per_account(
     today = pd.Timestamp.today().normalize()
     # --- Validate schema
     for df_name, df, cols in [
-        ('main_data', main_test_data, ['Channel ID', key]),
+        ('main_data', main_test_data, [channel_id_col, key]),
         ('week_lookup', week_lookup_test_data, [key]),
-        ('channel_lookup', start_dates, ['Channel ID', 'Start', 'End']),
+        ('channel_lookup', start_dates, [channel_id_col, 'Start', 'End']),
     ]:
         missing_cols = [c for c in cols if c not in df.columns]
         if missing_cols:
             raise ValueError(f"{df_name} is missing required columns: {missing_cols}")
 
     # --- Normalize IDs (prevent dtype mismatches)
-    main_test_data['Channel ID'] = main_test_data['Channel ID'].astype(str).str.strip()
-    start_dates['Channel ID'] = start_dates['Channel ID'].astype(str).str.strip()
+    main_test_data[channel_id_col] = main_test_data[channel_id_col].astype(str).str.strip()
+    start_dates[channel_id_col] = start_dates[channel_id_col].astype(str).str.strip()
 
     # --- Harmonize types (dates)
     if key != 'Week Number':
@@ -132,11 +133,11 @@ def test_weeks_presence_per_account(
     # If using week numbers, define your numeric cutoff logic similarly.
 
     # --- De-duplicate and keep only necessary columns
-    main_existing = main_test_data[['Channel ID', key]].drop_duplicates()
+    main_existing = main_test_data[[channel_id_col, key]].drop_duplicates()
     week_lookup_test_data = week_lookup_test_data[[key]].drop_duplicates()
-    start_dates = start_dates[['Channel ID', 'Start', 'End'] + (['start_week'] if key == 'Week Number' else [])].drop_duplicates()
+    start_dates = start_dates[[channel_id_col, 'Start', 'End'] + (['start_week'] if key == 'Week Number' else [])].drop_duplicates()
 
-    # --- Build expected (Channel ID × week) only for weeks >= Start
+    # --- Build expected (channel_id_col × week) only for weeks >= Start
     start_dates['_tmp'] = 1
     week_lookup_test_data['_tmp'] = 1
     expected = start_dates.merge(week_lookup_test_data, on='_tmp', how='inner').drop(columns=['_tmp'])
@@ -146,23 +147,23 @@ def test_weeks_presence_per_account(
     else:
         expected = expected[expected[key] >= expected['start_week']]
 
-    expected = expected[['Channel ID', key, 'End'] + (['Start'] if key != 'Week Number' else ['start_week'])].drop_duplicates()
+    expected = expected[[channel_id_col, key, 'End'] + (['Start'] if key != 'Week Number' else ['start_week'])].drop_duplicates()
 
     # --- Anti-join: expected minus actual
     missing = expected.merge(
         main_existing,
-        on=['Channel ID', key],
+        on=[channel_id_col, key],
         how='left',
         indicator=True
     )
-    missing = missing[missing['w/c'] > missing['Start']]
-    missing = missing[missing['w/c'] < missing['End']]
+    missing = missing[missing['w/c'] >= missing['Start']] # add =
+    missing = missing[missing['w/c'] <= missing['End'].fillna(today)]# add =
     
     missing = (
         missing[missing['_merge'] == 'left_only']
         .drop(columns=['_merge'])
-        .sort_values(['Channel ID', key])
-    ).sort_values(by='w/c')[['Start', 'End', 'Channel ID', 'w/c']]
+        .sort_values([channel_id_col, key])
+    ).sort_values(by='w/c')[['Start', 'End', channel_id_col, 'w/c']]
 
     # --- Output
     if missing.empty:
@@ -172,12 +173,12 @@ def test_weeks_presence_per_account(
         print(missing)
 
         summary = (
-            missing.groupby('Channel ID')[key]
+            missing.groupby(channel_id_col)[key]
             .nunique()
             .reset_index(name='missing_week_count')
             .sort_values('missing_week_count', ascending=False)
         )
-        print("\nSummary of missing weeks per Channel ID:")
+        print("\nSummary of missing weeks per channel_id_col:")
         print(summary)
 
     update_logbook(test_number, missing, 'missing weeks by channel since Start', test_step)

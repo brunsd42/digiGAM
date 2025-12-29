@@ -111,7 +111,9 @@ def execute_sql_query(sql_query):
         conn.close()
 
 ######################## lookup file
-def lookup_loader(gam_info, platformID, with_country=False, country_col=''):
+def lookup_loader(gam_info, platformID, script, 
+                  with_country=False, country_col='PlaceID',
+                  with_pop_col=False):
     # week 
     week_cols = ['w/c']
     week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
@@ -123,9 +125,9 @@ def lookup_loader(gam_info, platformID, with_country=False, country_col=''):
     week_tester = week_tester[week_tester['w/c'] < last_monday]
 
     test_functions.test_lookup_files(week_tester, ['w/c'], 
-                                     [f"{platformID}_1c_0", 
-                                      f"{platformID}_1c_1", 
-                                      f"{platformID}_1c_2"], 
+                                     [f"{platformID}_{script}_00", 
+                                      f"{platformID}_{script}_01", 
+                                      f"{platformID}_{script}_02"], 
                                      test_step = "lookup files - ensuring week tester is correct")
     # social media accoutns
     channel_cols=['Channel ID']
@@ -143,27 +145,35 @@ def lookup_loader(gam_info, platformID, with_country=False, country_col=''):
     socialmedia_accounts['End'] = pd.to_datetime(socialmedia_accounts['End'], 
                                                    errors='coerce', dayfirst=True)
     test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], 
-                                     [f"{platformID}_1c_3", 
-                                      f"{platformID}_1c_4", 
-                                      f"{platformID}_1c_5"],
+                                     [f"{platformID}_{script}_03", 
+                                      f"{platformID}_{script}_04", 
+                                      f"{platformID}_{script}_05"],
                                      test_step = "lookup files - ensuring social media accounts is correct")
     
     # country
     if with_country:
-        country_cols = [country_col, 'PlaceID']
-        country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}",
-                                      sheet_name='CountryID',
-                                      keep_default_na=False)[country_cols]
-        
-        test_functions.test_lookup_files(country_codes, country_cols, 
-                                         [f"{platformID}_1c_6", 
-                                          f"{platformID}_1c_7", 
-                                          f"{platformID}_1c_8"],
-                                         test_step="lookup files - ensuring country codes is correct")
-        return {'week_tester': week_tester,
-                'socialmedia_accounts': socialmedia_accounts,
-                'country_codes': country_codes,
-               }
+        if with_pop_col:
+            
+            country_cols = list(set([country_col, 'PlaceID', 
+                                     gam_info['population_column']]))
+            country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}",
+                                          sheet_name='CountryID',
+                                          keep_default_na=False)[country_cols]
+            
+            test_functions.test_lookup_files(country_codes, country_cols, 
+                                             [f"{platformID}_{script}_06", 
+                                              f"{platformID}_{script}_07", 
+                                              f"{platformID}_{script}_08"],
+                                             test_step="lookup files - ensuring country codes is correct")
+            return {'week_tester': week_tester,
+                    'socialmedia_accounts': socialmedia_accounts,
+                    'country_codes': country_codes,
+                   }
+        else:
+            return {'week_tester': week_tester,
+                    'socialmedia_accounts': socialmedia_accounts,
+                    'country_codes': country_codes.drop(columns=gam_info['population_column']),
+                   }
     else:
         return {'week_tester': week_tester,
                 'socialmedia_accounts': socialmedia_accounts,
@@ -215,6 +225,153 @@ def calculate_rolling_avg_country_split(df, metric_col='rescaled_percentage', mi
     # Combine all
     result = pd.concat(results, ignore_index=True)
     return result[['Channel ID', 'PlaceID', 'w/c', metric_col]]
+
+
+def apply_first_split_backfill(
+    avg_country_df: pd.DataFrame,
+    accounts_df: pd.DataFrame,
+    week_calendar_df: pd.DataFrame,
+    id_col: str = 'Channel ID',
+    week_col: str = 'w/c',
+    start_col: str = 'Start',
+    place_col: str = 'PlaceID',
+    value_col: str = 'country_%',
+    dayfirst: bool = True,
+    apply_ffill_bfill: bool = True,   # also propagate values within each (channel, place) over weeks
+    drop_residual_na: bool = True     # drop any rows that remain NaN in value_col after fills
+) -> pd.DataFrame:
+    """
+    Make `avg_country_df[value_col]` non-null by:
+      1) Backfilling earlier weeks (>= Start, < first non-null week) from the first available split per channel.
+      2) Optionally forward/backward fill within each (Channel ID, PlaceID).
+      3) Optionally drop residual NaNs in value_col.
+
+    Returns an augmented `avg_country_df` with 'backfilled_first_split' flag on rows created by step (1).
+    """
+
+    # --- Copies
+    avg_df   = avg_country_df.copy()
+    accounts = accounts_df[[id_col, start_col]].drop_duplicates().copy()
+    weeks    = week_calendar_df[[week_col]].drop_duplicates().copy()
+
+    # --- Normalize IDs and dates
+    for df, col in [(avg_df, id_col), (accounts, id_col)]:
+        df[col] = df[col].astype(str).str.strip()
+
+    def _norm_date(df, col):
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=dayfirst).dt.normalize()
+
+    _norm_date(avg_df, week_col)
+    _norm_date(accounts, start_col)
+    _norm_date(weeks, week_col)
+
+    # Drop unparseable essentials
+    avg_df   = avg_df.dropna(subset=[week_col])
+    accounts = accounts.dropna(subset=[start_col])
+    weeks    = weeks.dropna(subset=[week_col])
+
+    # Ensure flag column exists
+    if 'backfilled_first_split' not in avg_df.columns:
+        avg_df['backfilled_first_split'] = False
+
+    # --- Step 1: Backfill earlier weeks from first non-null split per channel
+    nonnull = avg_df.dropna(subset=[value_col])
+    first_nonnull = (
+        nonnull.groupby(id_col, as_index=False)[week_col]
+               .min()
+               .rename(columns={week_col: 'first_split_week'})
+    )
+    chan_info = accounts.merge(first_nonnull, on=id_col, how='inner')
+
+    created_rows = []
+
+    for ch in chan_info[id_col].unique():
+        start_dt = chan_info.loc[chan_info[id_col] == ch, start_col].iloc[0]
+        first_wk = chan_info.loc[chan_info[id_col] == ch, 'first_split_week'].iloc[0]
+
+        # Canonical prior weeks: Start <= w < first_wk
+        prior_weeks = weeks[(weeks[week_col] >= start_dt) & (weeks[week_col] < first_wk)]
+        if prior_weeks.empty:
+            continue
+
+        # Template: the (PlaceID, value) pairs from the first non-null week
+        template = nonnull[(nonnull[id_col] == ch) & (nonnull[week_col] == first_wk)][[place_col, value_col]]
+        if template.empty:
+            continue
+
+        # Fill in-place NaNs for existing rows
+        mask_prior_ch = (avg_df[id_col] == ch) & (avg_df[week_col].isin(prior_weeks[week_col]))
+        if mask_prior_ch.any():
+            prior_rows = avg_df.loc[mask_prior_ch, [id_col, week_col, place_col, value_col]]
+            prior_rows = prior_rows.merge(template, on=place_col, how='left', suffixes=('', '_tmpl'))
+            fill_mask = prior_rows[value_col].isna() & prior_rows[f'{value_col}_tmpl'].notna()
+
+            if fill_mask.any():
+                # Align updates via a composite key (week, place)
+                prior_rows['_key'] = list(zip(prior_rows[week_col], prior_rows[place_col]))
+                avg_df['_key'] = list(zip(avg_df[week_col], avg_df[place_col]))
+                update_map = dict(zip(
+                    prior_rows.loc[fill_mask, '_key'],
+                    prior_rows.loc[fill_mask, f'{value_col}_tmpl']
+                ))
+                idx = avg_df['_key'].isin(update_map.keys())
+                avg_df.loc[idx, value_col] = avg_df.loc[idx, '_key'].map(update_map)
+                avg_df.drop(columns=['_key'], inplace=True, errors='ignore')
+
+        # Create missing rows for prior weeks (channel, week, place) not present
+        grid = prior_weeks.assign(_k=1).merge(
+            template.assign(_k=1), on='_k', how='inner'
+        ).drop(columns=['_k'])
+        grid[id_col] = ch
+
+            
+    # --- Remove pairs that already exist (do not create duplicates) ---
+    existing_pairs = avg_df.loc[avg_df[id_col] == ch, [week_col, place_col]].copy()
+    existing_pairs['_pair'] = list(zip(existing_pairs[week_col], existing_pairs[place_col]))
+    
+    grid = grid.copy()
+    grid['_pair'] = list(zip(grid[week_col], grid[place_col]))
+    to_create = grid[~grid['_pair'].isin(existing_pairs['_pair'])].drop(columns=['_pair'])
+    
+    if not to_create.empty:
+        # Add flag and align columns
+        to_create['backfilled_first_split'] = True
+    
+        # Ensure all columns present in the new rows
+        for col in avg_df.columns:
+            if col not in to_create.columns:
+                to_create[col] = pd.NA
+    
+        # Keep only the avg_df schema/column order
+        to_create = to_create[avg_df.columns]
+        created_rows.append(to_create)
+
+    if created_rows:
+        avg_df = pd.concat([avg_df, *created_rows], ignore_index=True)
+
+    # --- Step 2 (optional): propagate values within each (Channel, Place) over weeks
+    if apply_ffill_bfill:
+        avg_df = (
+            avg_df.sort_values([id_col, place_col, week_col])
+                  .groupby([id_col, place_col], as_index=False)
+                  .apply(lambda g: g.assign(**{value_col: g[value_col].ffill().bfill()}))
+                  .reset_index(drop=True)
+        )
+
+    # --- Step 3 (optional): drop any remaining NaNs in value_col
+    if drop_residual_na:
+        avg_df = avg_df.dropna(subset=[value_col])
+
+    # Final tidy: de-duplicate and sort
+    dedupe_subset = [id_col, week_col, place_col] if place_col in avg_df.columns else [id_col, week_col]
+    avg_df = (avg_df
+              .drop_duplicates(subset=dedupe_subset, keep='first')
+              .sort_values([id_col, week_col, place_col] if place_col in avg_df.columns else [id_col, week_col])
+              .reset_index(drop=True))
+
+    return avg_df
+
 
 
 def gnl_expander(df):
