@@ -152,19 +152,18 @@ def lookup_loader(gam_info, platformID, script,
     
     # country
     if with_country:
-        if with_pop_col:
-            
-            country_cols = list(set([country_col, 'PlaceID', 
+        country_cols = list(set([country_col, 'PlaceID', 
                                      gam_info['population_column']]))
-            country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}",
-                                          sheet_name='CountryID',
-                                          keep_default_na=False)[country_cols]
-            
-            test_functions.test_lookup_files(country_codes, country_cols, 
-                                             [f"{platformID}_{script}_06", 
-                                              f"{platformID}_{script}_07", 
-                                              f"{platformID}_{script}_08"],
-                                             test_step="lookup files - ensuring country codes is correct")
+        country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}",
+                                      sheet_name='CountryID',
+                                      keep_default_na=False)[country_cols]
+        
+        test_functions.test_lookup_files(country_codes, country_cols, 
+                                         [f"{platformID}_{script}_06", 
+                                          f"{platformID}_{script}_07", 
+                                          f"{platformID}_{script}_08"],
+                                         test_step="lookup files - ensuring country codes is correct")
+        if with_pop_col:
             return {'week_tester': week_tester,
                     'socialmedia_accounts': socialmedia_accounts,
                     'country_codes': country_codes,
