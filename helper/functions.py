@@ -112,7 +112,7 @@ def execute_sql_query(sql_query):
 
 ######################## lookup file
 def lookup_loader(gam_info, platformID, script, 
-                  with_country=False, country_col='PlaceID',
+                  with_country=False, country_col=['PlaceID'],
                   with_pop_col=False):
     # week 
     week_cols = ['w/c']
@@ -152,8 +152,7 @@ def lookup_loader(gam_info, platformID, script,
     
     # country
     if with_country:
-        country_cols = list(set([country_col, 'PlaceID', 
-                                     gam_info['population_column']]))
+        country_cols = list(set(country_col + ['PlaceID', gam_info['population_column']]))
         country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}",
                                       sheet_name='CountryID',
                                       keep_default_na=False)[country_cols]

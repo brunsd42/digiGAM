@@ -89,7 +89,6 @@ def test_weeks_presence_per_account(
         Missing rows for (channel_id_col, key) where key >= Start.
     """
 
-    # --- Defensive copies
     main_test_data = main_data.copy()
     week_lookup_test_data = week_lookup.copy()
     start_dates = channel_lookup.copy()
