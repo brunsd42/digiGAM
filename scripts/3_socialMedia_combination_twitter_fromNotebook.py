@@ -42,44 +42,23 @@ sys.path.insert(0, str(helper_path))
 # Now import your modules 
 from config import gam_info
 
-from functions import execute_sql_query, gnl_expander
+from functions import lookup_loader, gnl_expander
 import test_functions
 
 
 # In[4]:
 
 
-# country
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
-                              keep_default_na=False)
+lookup = lookup_loader(gam_info, platformID, '3',
+                       with_country=True, country_col='TWI_CountryName')
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
+country_codes = lookup['country_codes']
 
-# week 
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
 
-# social media accounts
-dtype_dict = {'Channel ID': 'str',
-              'Linked FB Account': 'str'}
-socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
-                                     sheet_name='Social Media Accounts new')
-
-#socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
-socialmedia_accounts['Channel ID'] = socialmedia_accounts['Channel ID'].dropna().apply(lambda x: str(int(x)))
-
-channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
+'''channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
-
-### RUN TESTS
-test_functions.test_lookup_files(country_codes, ['PlaceID'], [f"{platformID}_3_0", f"{platformID}_3_1", f"{platformID}_3_2"], 
-                                 test_step="lookup files - ensuring country codes is correct")
-
-test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_3_3", f"{platformID}_3_4", f"{platformID}_3_5"], 
-                                 test_step = "lookup files - ensuring week tester is correct")
-
-test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_3_6", f"{platformID}_3_7", f"{platformID}_3_8"], 
-                                 test_step = "lookup files - ensuring social media accounts is correct")
-
+'''
 
 
 # # ingestion
@@ -89,14 +68,12 @@ test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platf
 
 tw_activity_df_raw = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT.csv",
                              keep_default_na=False)
-
-
-tw_activity_df_raw['Channel ID'] = tw_activity_df_raw['Channel ID'].apply(lambda x: str(int(x)))
+tw_activity_df_raw['w/c'] = pd.to_datetime(tw_activity_df_raw['w/c'])
 tw_activity_df = tw_activity_df_raw.merge(week_tester[['w/c', 'WeekNumber_finYear']], 
                                           on='w/c', how='left')
 test_functions.test_inner_join(tw_activity_df, week_tester[['w/c', 'WeekNumber_finYear']],
                                ['w/c'],
-                               f"{platformID}_3_9",
+                               f"{platformID}_3_09",
                                focus='left')
 
 tw_activity_df.sample()
@@ -108,7 +85,7 @@ tw_activity_df.sample()
 tw_country_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country.csv",
                             low_memory=False)
 
-tw_country_df['Channel ID'] = tw_country_df['Channel ID'].fillna('').apply(lambda x: str(int(x)))
+tw_country_df['Channel ID'] = tw_country_df['Channel ID'].fillna('')
 cols = ['Channel ID', 'Linked FB Account', 'WeekNumber_finYear', 'PlaceID', 'Engagement %']
 tw_country_df = tw_country_df[cols]
 
@@ -126,20 +103,27 @@ tw_country_df.sample()
 # In[7]:
 
 
-tw_activity_country = tw_activity_df.merge(tw_country_df, on=['Channel ID', 'WeekNumber_finYear'], 
-                                           how='left', indicator=True)
-
-test_functions.test_inner_join(tw_activity_df, tw_country_df, ['Channel ID', 'WeekNumber_finYear'], 
-                               f"{platformID}_3_10", 
-                               test_step='joining activity & country - first')
-tw_activity_country.sample()
+'''tw_activity_country[tw_activity_country['_merge'] == 'left_only'].merge(socialmedia_accounts[['Channel ID', 'ServiceID']], on ='Channel ID', how='left')
+'''
 
 
 # In[8]:
 
 
+tw_activity_country = tw_activity_df.merge(tw_country_df, on=['Channel ID', 'WeekNumber_finYear'], 
+                                           how='left', indicator=True)
+
+test_functions.test_inner_join(tw_activity_df, tw_country_df, ['Channel ID', 'WeekNumber_finYear'], 
+                               f"{platformID}_3_10", 
+                               test_step='joining activity & country - first', focus='left')
+tw_activity_country.sample()
+
+
+# In[9]:
+
+
 left_over = tw_activity_country[tw_activity_country._merge == 'left_only'].drop(columns='_merge')
-final_1 = tw_activity_country[tw_activity_country._merge != 'left_only'].drop(columns='_merge')
+final_1 = tw_activity_country[tw_activity_country._merge == 'both'].drop(columns='_merge')
 
 # groupby 
 grouped_df = tw_country_df.groupby(['Channel ID',  'Linked FB Account', 'PlaceID']).agg({
@@ -150,10 +134,11 @@ grouped_df = tw_country_df.groupby(['Channel ID',  'Linked FB Account', 'PlaceID
 final_2 = left_over[tw_activity_df.columns].merge(grouped_df, on='Channel ID', how='left')#.drop(columns='_merge')
 test_functions.test_inner_join(left_over, grouped_df, ['Channel ID'], 
                                f"{platformID}_3_11",
-                               test_step='joining activity & country - second')
+                               test_step='joining activity & country - second', 
+                                focus='left')
 
 
-# In[9]:
+# In[10]:
 
 
 cols = ['Channel ID', 'tweet_engagements', 'video_video_views',
@@ -176,7 +161,7 @@ final_df.to_csv(f"../data/processed/{platformID}/temp_{gam_info['file_timeinfo']
 final_df.sample()
 
 
-# In[10]:
+# In[11]:
 
 
 # handle if country == 'other'
@@ -192,7 +177,7 @@ rescaled_df['engagement_%'] = rescaled_df["Engagement %_"]/rescaled_df["Engageme
 
 # ## facebook factor 
 
-# In[11]:
+# In[12]:
 
 
 fb_factor = pd.read_excel("../data/stale/FB Factor for IG and TW.xlsx").drop_duplicates()
@@ -245,7 +230,7 @@ twitter_df = pd.concat([done, fixed])
 print(f"4: {twitter_df.shape}")
 
 
-# In[12]:
+# In[13]:
 
 
 twitter_df['video_video_views'] = twitter_df['video_video_views'].fillna(0)
@@ -258,7 +243,7 @@ twitter_df['Twitter Engaged Users'] = np.where(twitter_df['temp']>twitter_df['30
 twitter_df['uv_by_country'] = twitter_df["Twitter Engaged Users"]*twitter_df["engagement_%"]
 
 
-# In[13]:
+# In[14]:
 
 
 print(twitter_df.shape)

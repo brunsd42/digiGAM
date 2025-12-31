@@ -4,6 +4,12 @@
 # In[1]:
 
 
+platformID = 'WWW'
+
+
+# In[2]:
+
+
 from datetime import datetime
 import pandas as pd
 pd.set_option('display.max_colwidth', None)
@@ -22,7 +28,7 @@ from tqdm import tqdm
 
 # ## import helper
 
-# In[2]:
+# In[3]:
 
 
 import sys
@@ -45,7 +51,7 @@ import test_functions
 import functions
 
 
-# In[3]:
+# In[4]:
 
 
 # country
@@ -85,13 +91,13 @@ app_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_App
 
 # ## Piano
 
-# In[4]:
-
-
-test_functions.site_test_unique_entries(site_info, 'Report No.', '1_Site_1', 'initial api query list')
-
-
 # In[5]:
+
+
+test_functions.site_test_unique_entries(site_info, 'Report No.', f'{platformID}_1_01', 'initial api query list')
+
+
+# In[6]:
 
 
 i = 0
@@ -140,7 +146,7 @@ for index, row in site_info.iterrows():
     print(f"finished report no {report_no}")
 
 
-# In[6]:
+# In[7]:
 
 
 # test if more than 10000 rows are recorded to see if the pagination works 
@@ -153,7 +159,7 @@ for index, row in site_info.iterrows():
 
 # ## Chartbeat vs Piano
 
-# In[7]:
+# In[8]:
 
 
 # build at home
@@ -161,7 +167,7 @@ for index, row in site_info.iterrows():
 
 # # Processing 
 
-# In[8]:
+# In[9]:
 
 
 filepath = f"../data/raw/site/piano_reports/"
@@ -195,20 +201,25 @@ if 'API' not in combined_df.columns:
 combined_df['w/c'] = pd.to_datetime(combined_df['w/c'] )
 
 
-# In[9]:
+# In[10]:
 
 
 # test all reports are there 
 test_functions.test_inner_join(site_info, combined_df, ['Report No.', 'API'], 
-                               '1_Site_2', 'adding report context info', focus='left')
+                               f'{platformID}_1_02', 'adding report context info', focus='left')
 
 # add report info
 full_df = site_info.merge(combined_df, on=['Report No.', 'API'], how='inner', )
 #print(full_df['Report No.'].unique())
 
 # test all weeks are there 
-test_functions.test_weeks_presence_per_account('w/c', 'Report No.', full_df, week_tester, 
-                                               '1_Site_3', test_step='combining api returns')
+test_functions.test_weeks_presence_per_account(key='w/c', 
+                                               channel_id_col='Report No.',
+                                               main_data=full_df, 
+                                               week_lookup=week_tester, 
+                                               channel_lookup=service_codes,
+                                               f'{platformID}_1_03', 
+                                               test_step='combining api returns')
 
 # add week_lookup data
 full_df = full_df.merge(week_tester[['YearGAE', 'WeekNumber_finYear', 'w/c']], on='w/c', how='left')
@@ -240,7 +251,7 @@ for column, dtype in dtype_spec.items():
 full_df.to_csv(f"../data/raw/site/{gam_info['file_timeinfo']}_rawDataFromPiano.csv", index=None)
 
 
-# In[10]:
+# In[ ]:
 
 
 full_df.head()

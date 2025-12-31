@@ -49,30 +49,24 @@ sys.path.insert(0, str(helper_path))
 from config import gam_info
 
 import test_functions 
-import functions 
+from functions import lookup_loader, include_uk_decision, sainsbury_formula, summary_excel, calculate_weekly_Services, calculate_aggregated_services
 
 
 # In[4]:
 
 
+lookup = lookup_loader(gam_info, platformID, '4',
+                       with_country=True, with_pop_col=True)
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
+country_codes = lookup['country_codes']
+
+
+# In[5]:
+
+
 # country
 pop_size_col = gam_info['population_column']
-
-country_cols = ['PlaceID', pop_size_col]
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
-                              keep_default_na=False)[country_cols]
-
-# week 
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period',)
-week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-
-# social media accounts
-socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", 
-                                     sheet_name='Social Media Accounts new')
-
-#socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
 
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
@@ -81,20 +75,9 @@ formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_id
 overlaps = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='overlap')
 
 
-### RUN TESTS
-test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_4_0", f"{platformID}_4_1", f"{platformID}_4_2"], 
-                                 test_step="lookup files - ensuring country codes is correct")
-
-test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_4_3", f"{platformID}_4_4", f"{platformID}_4_5"], 
-                                 test_step = "lookup files - ensuring week tester is correct")
-
-test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_4_6", f"{platformID}_4_7", f"{platformID}_4_8"], 
-                                 test_step = "lookup files - ensuring social media accounts is correct")
-
-
 # ## import data 
 
-# In[5]:
+# In[6]:
 
 
 full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv")
@@ -103,11 +86,8 @@ full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo'
 full_df.head()
 
 
-# In[6]:
+# In[7]:
 
-
-full_df['Channel ID'] = full_df['Channel ID'].apply(lambda x: str(int(x)))
-print(full_df.shape)
 
 full_df = full_df.merge(country_codes, on='PlaceID', 
                         how='left', indicator=True)
@@ -119,7 +99,7 @@ full_df.drop(columns=['_merge'], inplace=True)
 
 # # calculate 
 
-# In[7]:
+# In[8]:
 
 
 path = f"../data/singlePlatform/{platformID}/"
@@ -127,7 +107,7 @@ path = f"../data/singlePlatform/{platformID}/"
 
 # ## Business Units
 
-# In[8]:
+# In[9]:
 
 
 data = {}
@@ -149,7 +129,7 @@ for bu in gam_info['business_units'].keys():
     channel_ids = df['Channel ID'].unique().tolist()
     
     # will include / exclude the uk based on bu_configs
-    df = functions.include_uk_decision(df, socialmedia_accounts)
+    df = include_uk_decision(df, socialmedia_accounts)
     
     # for later testing or if sainsbury isn't used 
     summed_uv_by_country = df.groupby(['ServiceID', 'w/c', 'PlaceID'])\
@@ -178,7 +158,7 @@ for bu in gam_info['business_units'].keys():
         channel_uv_by_country = channel_uv_by_country.fillna(0)
         
         #calculate sainsbury
-        channel_uv_by_country = functions.sainsbury_formula(channel_uv_by_country, pop_size_col, 
+        channel_uv_by_country = sainsbury_formula(channel_uv_by_country, pop_size_col, 
                                       channel_ids, 'uv_by_country')
         channel_uv_by_country = channel_uv_by_country.drop(columns=channel_ids)
         
@@ -194,7 +174,7 @@ for bu in gam_info['business_units'].keys():
         yt_deduped = summed_uv_by_country.rename(columns={'uv_by_country': 'Reach'})
     
     # processing 
-    weekly_df= functions.summary_excel(yt_deduped, bu, platformID, gam_info)
+    weekly_df= summary_excel(yt_deduped, bu, platformID, gam_info)
     
     # storing data
     data[bu]['weekly'] = weekly_df
@@ -205,17 +185,17 @@ for bu in gam_info['business_units'].keys():
 
 # ## AXE, GNL
 
-# In[9]:
+# In[10]:
 
 
 data['AXE'] = {'weekly': pd.DataFrame()}
-data['AXE']['weekly'] = functions.calculate_weekly_Services(data['WSL']['weekly'], 'AXE', 
+data['AXE']['weekly'] = calculate_weekly_Services(data['WSL']['weekly'], 'AXE', 
                                                             platformID, pop_size_col,
                                                             gam_info, 'sum') 
 
 # TODO add explainer to make clear how a new service is created (BNI BNO breakout in GNL)
 data['GNL'] = {'weekly': pd.DataFrame()}
-data['GNL']['weekly'] = functions.calculate_weekly_Services(data['GNL_']['weekly'], 'GNL', 
+data['GNL']['weekly'] = calculate_weekly_Services(data['GNL_']['weekly'], 'GNL', 
                                                             platformID, pop_size_col,
                                                             gam_info) 
 
@@ -223,7 +203,7 @@ data['GNL']['weekly'] = functions.calculate_weekly_Services(data['GNL_']['weekly
 # ## AX2, ANW, ANY, TOT, ALL, ENG, EN2 ENW
 # 
 
-# In[10]:
+# In[11]:
 
 
 path = f"../data/singlePlatform/{platformID}/"
@@ -238,11 +218,11 @@ stages = [
         ('EN2', 'GNL', 'WSE', 'other', '-', True, 'WOR'),
         ('ENW', 'WSE', 'FOA', 'sainsbury', '-', False, None)
     ]
-data = functions.calculate_aggregated_services(data, stages, platformID, gam_info, path, overlaps, 
+data = calculate_aggregated_services(data, stages, platformID, gam_info, path, overlaps, 
                                                 country_codes, pop_size_col)
 
 
-# In[13]:
+# In[12]:
 
 
 # Combine all 'weekly' DataFrames
@@ -255,10 +235,11 @@ combined_weekly = pd.concat(
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               id_column='ServiceID',
+                                               channel_id_col='ServiceID',
                                                main_data=combined_weekly,
                                                week_lookup=week_tester[['w/c']],
-                                               test_number=f"{platformID}_4_9_processing",
+                                               channel_lookup=socialmedia_accounts[['ServiceID', 'Start', 'End']],
+                                               test_number=f"{platformID}_4_09",
                                                test_step="Check all weeks present for each account")
 
 
@@ -267,7 +248,7 @@ combined_weekly.sample()
 combined_weekly['PlatformID'] = platformID
 # SERVICE hierarchy issues
 test_step = "calculated high-level services"
-service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_10_processing", 
+service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_10", 
                                                                'Service', 
                                                                gam_info, 
                                                                combined_weekly, 
@@ -275,10 +256,4 @@ service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_
                                                                metric_col='Reach',
                                                                test_step= test_step, 
                                                                 round_metric=True)
-
-
-# In[ ]:
-
-
-combined_weekly[(combined_weekly['w/c'] == '')]
 

@@ -34,7 +34,7 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
-from functions import execute_sql_query
+from functions import lookup_loader, execute_sql_query
 import test_functions
 
 from config import gam_info
@@ -43,31 +43,10 @@ from config import gam_info
 # In[4]:
 
 
-# week 
-week_cols = ['w/c']
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
-
-# social media accounts
-channel_cols=['Channel ID']
-dtype_dict = {'Channel ID': 'str',
-              'Linked FB Account': 'str'}
-socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
-                                     sheet_name='Social Media Accounts new')
-
-# socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
-socialmedia_accounts['Channel ID'] = socialmedia_accounts['Channel ID'].dropna().apply(lambda x: str(int(x)))
-
-channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
-formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
-
-### RUN TESTS
-test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_1engage_3", f"{platformID}_1engage_4", f"{platformID}_1engage_5"], 
-                                 test_step = "lookup files - ensuring week tester is correct")
-
-test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_1engage_6", f"{platformID}_1engage_7", f"{platformID}_1engage_8"], 
-                                 test_step = "lookup files - ensuring social media accounts is correct")
+lookup = lookup_loader(gam_info, platformID, '1e',
+                       with_country=False)
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
 
 
 # # engagements 
@@ -102,72 +81,91 @@ sql_query = f"""
 """
 
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_engagements_redshift_extract.csv"
-df = execute_sql_query(sql_query)
-df['page_id'] = df['page_id'].astype(str)
-df.to_csv(file, index=False, na_rep='')
-'''try: 
+
+# TODO make this more fail safe - e.g. I want to run this and say if it should query redshift or not
+try: 
     df = execute_sql_query(sql_query)
-    df['page_id'] = df['page_id'].astype(str)
+    df['page_id'] = platformID+df['page_id'].astype(str)
     df.to_csv(file, index=False, na_rep='')
 except:
     print("no redshift connection using last time queried")
-'''    
+    
 facebook_engagements_raw = pd.read_csv(file, keep_default_na=False)
 facebook_engagements_raw['page_id'] = facebook_engagements_raw['page_id'].astype(str)
-
-
-# In[6]:
-
-
 facebook_engagements_raw['week_commencing'] = pd.to_datetime(facebook_engagements_raw['week_commencing'])
 facebook_engagements_raw = facebook_engagements_raw.rename(columns={'page_id': 'Channel ID', 
                                                                     'week_commencing': 'w/c'})
 print(facebook_engagements_raw.shape)
 
+
+# In[7]:
+
+
+channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 ### RUN TESTS
 # missing page_ids
 test_functions.test_filter_elements_returned(facebook_engagements_raw, 
                                              channel_ids, 
                                              'Channel ID', 
-                                             f"6_{platformID}_engagements",
+                                             f"{platformID}_1e_06",
                                              "Check that all page IDs are found in SQL")
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               id_column='Channel ID',
+                                               channel_id_col='Channel ID',
                                                main_data=facebook_engagements_raw,
                                                week_lookup=week_tester[['w/c']],
-                                               test_number=f"7_{platformID}_engagements",
+                                               channel_lookup=socialmedia_accounts[['Channel ID', 'Start', 'End']],
+                                               test_number=f"{platformID}_1e_07",
                                                test_step="Check all weeks present for each account")
 
 # missing values per week / page id 
 test_functions.test_non_null_and_positive(facebook_engagements_raw, 
                            numeric_columns=['engaged_reach'], 
-                           test_number=f"8_{platformID}_engagements",
+                           test_number=f"{platformID}_1e_08",
                            test_step='Check no missing values in engaged_reach column from redshift returned')
 
 # test for duplicate entries 
 test_functions.test_duplicates(facebook_engagements_raw, 
                                ['Channel ID', 'w/c'], 
-                               test_number=f"9_{platformID}_engagements",
+                               test_number=f"{platformID}_1e_09",
                                test_step='Check no duplicates from redshift returned')
 
 
 # ## processing engagements
 
-# In[7]:
+# In[8]:
 
 
-facebook_engagements = facebook_engagements_raw.merge(socialmedia_accounts[['Channel ID', 'ServiceID']], 
-                                                      on='Channel ID', how='left', indicator=True)
+# needs to be right because we want to make sure that all the accounts in lookup are there 
+facebook_engagements = facebook_engagements_raw.merge(socialmedia_accounts[['Channel ID', 'ServiceID', 'Start', 'End']], 
+                                                      on='Channel ID', how='right', indicator=True)
 test_functions.test_inner_join(facebook_engagements_raw, socialmedia_accounts, 
                                ['Channel ID'], 
-                               f"10_{platformID}_engagements", 
+                               f"{platformID}_1e_10", 
                                test_step='checking social media accounts in lookup, adding service',
-                               focus='left')
+                               focus='right')
 
 
-# In[8]:
+mask = (
+    (facebook_engagements['w/c'] >= facebook_engagements['Start']) &
+    (
+        facebook_engagements['End'].isna() |
+        (facebook_engagements['w/c'] <= facebook_engagements['End'])
+    )
+)
+# there are newly active accounts that have 0 for the weeks before they became active
+# for accurate reach calculation those weeks need to be removed
+facebook_engagements = facebook_engagements[mask]
+
+
+# In[9]:
+
+
+facebook_engagements[facebook_engagements['Channel ID'] == 'FBE102775241582303'].sort_values('w/c')
+
+
+# In[10]:
 
 
 file_path = f"../data/processed/{platformID}"
@@ -178,15 +176,8 @@ facebook_engagements[cols].to_csv(f"{file_path}/{gam_info['file_timeinfo']}_{pla
                                        index=None)
 
 
-# In[9]:
+# In[ ]:
 
 
-facebook_engagements[(facebook_engagements['w/c'] == '2025-12-01')  & 
-    (facebook_engagements['Channel ID'].isin(['1296222730434431']))]
 
-
-# In[10]:
-
-
-#['1296222730434431' '143048895744759' '1526071940947174' '237647452933504''151955124848859']
 

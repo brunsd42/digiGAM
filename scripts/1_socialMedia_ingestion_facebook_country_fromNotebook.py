@@ -34,7 +34,7 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from functions import execute_sql_query, compare_or_update_reference
+from functions import lookup_loader, execute_sql_query, calculate_rolling_avg_country_split, apply_first_split_backfill, compare_or_update_reference
 import test_functions
 
 from config import gam_info
@@ -43,51 +43,16 @@ from config import gam_info
 # In[4]:
 
 
-# country
-country_cols = ['YT-_FBE_codes', 'PlaceID']
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID',
-                             keep_default_na=False)[country_cols]
-# week 
-week_cols = ['w/c']
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
-week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-
-today = pd.Timestamp.today().normalize()
-last_monday = today - pd.Timedelta(days=(today.weekday() % 7))
-week_tester = week_tester[week_tester['w/c'] < last_monday]
-
-# social media accoutns
-channel_cols=['Channel ID']
-dtype_dict = {'Channel ID': 'str',
-              'Linked FB Account': 'str'}
-socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
-                                     sheet_name='Social Media Accounts new')
-
-#socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Year'] == gam_info['file_timeinfo']]
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
-socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
-channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
-
-### RUN TESTS
-test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_1c_0", f"{platformID}_1c_1", f"{platformID}_1c_2"], 
-                                 test_step="lookup files - ensuring country codes is correct")
-
-test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_1c_3", f"{platformID}_1c_4", f"{platformID}_1c_5"], 
-                                 test_step = "lookup files - ensuring week tester is correct")
-
-test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_1c_6", f"{platformID}_1c_7", f"{platformID}_1c_8"], 
-                                 test_step = "lookup files - ensuring social media accounts is correct")
-
-
-# In[5]:
-
-
-week_tester
+lookup = lookup_loader(gam_info, platformID, '1c',
+                       with_country=True, country_col=['YT-_FBE_codes'])
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
+country_codes = lookup['country_codes']
 
 
 # ## country
 
-# In[16]:
+# In[5]:
 
 
 sql_query = f"""
@@ -104,41 +69,43 @@ sql_query = f"""
         ;
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_country_redshift_extract.csv"
-'''
-df = execute_sql_query(sql_query)
-df['page_id'] = df['page_id'].astype(str)
-df.to_csv(file, index=False, na_rep='')
-'''
+
 try: 
     df = execute_sql_query(sql_query)
-    df['page_id'] = df['page_id'].astype(str)
+    df['page_id'] = platformID+facebook_country_raw['page_id']
     df.to_csv(file, index=False, na_rep='')
 except:
     print("no redshift connection using last time queried")
 
-facebook_country_raw = pd.read_csv(file, keep_default_na=False)
-
-facebook_country_raw['page_id'] = facebook_country_raw['page_id'].astype(int).astype(str)
+facebook_country_raw = pd.read_csv(file, keep_default_na=False, dtype={"page_id": "string"}).drop_duplicates()
 facebook_country_raw['week_commencing'] = pd.to_datetime(facebook_country_raw['week_commencing'])
 facebook_country_raw = facebook_country_raw.rename(columns={'page_id': 'Channel ID',
                                                             'page_name': 'Channel Name',
                                                             'week_commencing': 'w/c',
                                                             'fb_metric_breakdown': 'YT-_FBE_codes'})
 
+
+
+# In[7]:
+
+
+channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
+
 ### RUN TESTS
 # missing page_ids
 test_functions.test_filter_elements_returned(facebook_country_raw, 
                                              channel_ids, 
                                              'Channel ID', 
-                                             f"{platformID}_1c_9",
+                                             f"{platformID}_1c_09",
                                              "Check that all page IDs are found in SQL")
 
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               id_column='Channel ID',
+                                               channel_id_col='Channel ID',
                                                main_data=facebook_country_raw,
                                                week_lookup=week_tester[['w/c']],
+                                               channel_lookup=socialmedia_accounts[['Channel ID', 'Start', 'End']],
                                                test_number=f"{platformID}_1c_10",
                                                test_step="Check all weeks present for each account")
 
@@ -149,43 +116,35 @@ test_functions.test_non_null_and_positive(facebook_country_raw,
                            test_step='Check no missing values in page fans column from redshift returned')
 
 # test for duplicate entries 
-test_functions.test_duplicates(facebook_country_raw, ['Channel ID', 'w/c'], 
+test_functions.test_duplicates(facebook_country_raw, ['Channel ID', 'w/c', 'YT-_FBE_codes'], 
                                test_number=f"{platformID}_1c_12",
                                test_step='Check no duplicates from redshift returned')
 
 
-# In[17]:
+# In[8]:
 
 
-facebook_country_raw.sort_values('w/c')['w/c'].unique()
-
-
-# In[18]:
-
-
-channel_ids
-
-
-# In[19]:
-
-
-facebook_country_raw['Channel ID'].unique()
-
-
-# In[21]:
-
-
-# filter to relevant pageID's
+# filter to relevant channel ids
 facebook_country = facebook_country_raw[facebook_country_raw['Channel ID'].isin(channel_ids)]
+
+# fill missing countries 
+facebook_country['YT-_FBE_codes'] = facebook_country['YT-_FBE_codes'].replace('', 'ZZ')
+
+# filter to relevant countries
 test_functions.test_inner_join(facebook_country, 
                                country_codes, 
                                ['YT-_FBE_codes'], 
                                f"{platformID}_1c_13",
-                               test_step='calculating country %')
+                               test_step='calculating country %',
+                                focus='left')
 
 facebook_country = facebook_country.merge(country_codes[['YT-_FBE_codes', 'PlaceID']], 
                                           on='YT-_FBE_codes', 
                                           how='left').drop(columns=['YT-_FBE_codes'])
+
+
+# In[9]:
+
 
 # Group by specified columns and sum the fb_metric_value
 facebook_country_sum = facebook_country.groupby(['Channel ID', 'w/c'])\
@@ -207,28 +166,113 @@ test_functions.test_percentage(facebook_country,
                                test_step='summing country % per week & account')
 
 
-# In[22]:
+# In[10]:
+
+
+# calculate rolling average for missing weeks ?
+avg_country_df = calculate_rolling_avg_country_split(facebook_country, 'country_%', 
+                                                     week_tester['w/c'].min(), week_tester['w/c'].max())
+
+# new channels have missing country splits for the first few weeks
+avg_backfill_country_df = apply_first_split_backfill(avg_country_df, 
+                                                          socialmedia_accounts, 
+                                                          week_tester
+                                                         )
+
+
+# In[11]:
+
+
+# Canonical channel list and canonical week list
+channel_list = facebook_country[['Channel ID']].drop_duplicates()
+week_list = week_tester[['w/c']].drop_duplicates()
+
+# Build full (Channel × Week) grid via cross join
+expected_grid = channel_list.merge(week_list, how='cross')
+
+# Join channel start/end info and keep only weeks within each channel's active window
+# - Include weeks on/after Start
+# - Include weeks on/before End (or 'today' if End is missing)
+expected_grid = expected_grid.merge(
+    socialmedia_accounts[['Channel ID', 'Start', 'End']],
+    on='Channel ID',
+    how='left'
+)
+
+today = pd.Timestamp.today().normalize()
+expected_grid = expected_grid[
+    (expected_grid['Start'] <= expected_grid['w/c']) &
+    (expected_grid['End'].fillna(today) >= expected_grid['w/c'])
+]
+
+# Left-join actual engagements to the expected grid to detect missing rows
+filled_grid = expected_grid.merge(
+    facebook_country,
+    on=['Channel ID', 'w/c'],
+    how='left',
+    indicator=True
+)
+
+# Mark rows that are missing in the original data
+filled_grid['missing_week'] = (filled_grid['_merge'] == 'left_only')
+filled_grid = filled_grid.drop(columns=['_merge'])
+
+# Join per-channel rolling averages (already computed) to supply fill values
+# Suffix `_avg` ensures we can distinguish average columns from originals
+result_df = filled_grid.merge(
+    avg_backfill_country_df,
+    on=['Channel ID', 'w/c'],
+    how='left',
+    suffixes=['', '_avg']
+).drop_duplicates()
+
+# Fill NaNs in original columns with per-channel averages (only where original is missing)
+result_df['PlaceID']   = result_df['PlaceID'].fillna(result_df['PlaceID_avg'])
+result_df['country_%'] = result_df['country_%'].fillna(result_df['country_%_avg'])
+
+# duplicates because there is a row expansion between main dataset and average for weeks that have country data
+cols = ['Channel ID', 'Channel Name', 'w/c', 'PlaceID', 'country_%']
+result_df = result_df[cols].drop_duplicates().dropna(subset='country_%')
+# result_df now contains:
+# - All (Channel ID, w/c) rows within each channel's Start–End window
+# - `missing_week=True` for synthetic rows added from the expected grid
+# - Filled `PlaceID` / `country_%` from per-channel averages where originals were NaN
+
+
+# In[13]:
+
+
+# missing weeks per page_id
+test_functions.test_weeks_presence_per_account(key='w/c',
+                                               channel_id_col='Channel ID',
+                                               main_data=result_df,
+                                               week_lookup=week_tester[['w/c']],
+                                               channel_lookup=socialmedia_accounts[['Channel ID', 'Start', 'End']],
+                                               test_number=f"{platformID}_1c_16",
+                                               test_step="After rolling average: Check all weeks present for each account")
+
+# missing values per week / page id 
+test_functions.test_non_null_and_positive(result_df, 
+                           numeric_columns=['country_%'], 
+                           test_number=f"{platformID}_1c_17",
+                           test_step='After rolling average: Check no missing values in page fans column from redshift returned')
+
+# test for duplicate entries 
+test_functions.test_duplicates(result_df, 
+                               ['Channel ID', 'w/c', 'PlaceID'], 
+                               test_number=f"{platformID}_1c_18",
+                               test_step='After rolling average: Check no duplicates from redshift returned')
+
+
+# In[14]:
 
 
 file_path = f"../data/processed/{platformID}"
 os.makedirs(file_path, exist_ok=True)
 
 cols = ['Channel ID', 'Channel Name', 'w/c', 'PlaceID', 'country_%']
-#facebook_country[cols].to_csv(f"{file_path}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_COUNTRY.csv",
-#                        index=None)
-
-
-# In[9]:
-
-
-#testing differences
-stored_file = pd.read_csv(f"{file_path}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_COUNTRY.csv")
-stored_file['Channel ID'] = stored_file['Channel ID'].astype(str)
-stored_file['w/c'] = pd.to_datetime(stored_file['w/c'])
-combined = facebook_country[cols].merge(stored_file, on=['Channel ID', 'Channel Name', 'w/c', 'PlaceID'], how='outer', 
-                                        suffixes=['_new', '_stored'] )
-combined['diff'] = combined['country_%_new'] - combined['country_%_stored']
-combined[(combined['diff'] > 0.01) | (combined['diff'] < -0.01)]
+result_df[cols].to_csv(f"{file_path}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_COUNTRY.csv",
+                        index=None)
 
 
 # In[ ]:

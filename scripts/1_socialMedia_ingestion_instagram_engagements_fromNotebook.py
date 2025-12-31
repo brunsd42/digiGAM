@@ -37,13 +37,27 @@ sys.path.insert(0, str(helper_path))
 
 # Now import your modules 
 from config import gam_info
-from functions import execute_sql_query
+from functions import execute_sql_query, lookup_loader
 import test_functions 
 
 
 # In[4]:
 
 
+lookup = lookup_loader(gam_info, platformID, '1e',
+                       with_country=True, country_col=['YT-_FBE_codes', 'ins_country_name',])
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
+country_codes = lookup['country_codes']
+
+# Factors
+ins_factors = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='INS_Factors', index_col='ServiceID')['Factor']
+
+
+# In[5]:
+
+
+'''
 # week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
@@ -63,25 +77,14 @@ test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_engage_0"
 
 test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_engage_3", f"{platformID}_engage_4", f"{platformID}_engage_5"], 
                                  test_step = "lookup files - ensuring social media accounts is correct")
+'''
 
 
 # # ingestion
 
 # # activity
 
-# In[5]:
-
-
-{gam_info['w/c_start']}
-
-
 # In[6]:
-
-
-{gam_info['w/c_end']}
-
-
-# In[7]:
 
 
 sql_query = f"""
@@ -120,17 +123,13 @@ sql_query = f"""
     """
 file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_activity_redshift_extract.csv"
 
-df = execute_sql_query(sql_query)
-df['ig_user_id'] = df['ig_user_id'].astype(str)
-df.to_csv(file, index=False, na_rep='')
-'''
 try: 
     df = execute_sql_query(sql_query)
-    df['ig_user_id'] = df['ig_user_id'].astype(str)
+    df['ig_user_id'] = platformID+df['ig_user_id'].astype(str)
     df.to_csv(file, index=False, na_rep='')
 except:
     print("no redshift connection using last time queried")
-'''
+
 ig_views_raw = pd.read_csv(file, keep_default_na=False)
 ig_views_raw['ig_user_id'] = ig_views_raw['ig_user_id'].astype(str) 
 ig_views_raw['week_commencing'] = pd.to_datetime(ig_views_raw['week_commencing'])
@@ -138,36 +137,39 @@ ig_views_raw = ig_views_raw.rename(columns={'ig_user_id': 'Channel ID',
                                             'week_commencing': 'w/c'})
 
 ### RUN TESTS
+channel_ids = socialmedia_accounts['Channel ID'].tolist()
+
 # missing page_ids
 test_functions.test_filter_elements_returned(ig_views_raw, 
                                              channel_ids, 
                                              'Channel ID', 
-                                             f"{platformID}_engage_6", 
+                                             f"{platformID}_1e_06", 
                                              "Check that all page IDs are found in SQL")
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               id_column='Channel ID',
+                                               channel_id_col='Channel ID',
                                                main_data=ig_views_raw,
                                                week_lookup=week_tester[['w/c']],
-                                               test_number=f"{platformID}_engage_7", 
+                                               channel_lookup=socialmedia_accounts[['Channel ID', 'Start', 'End']],
+                                               test_number=f"{platformID}_1e_07", 
                                                test_step="Check all weeks present for each account")
 
 # missing values per week / page id 
 test_functions.test_non_null_and_positive(ig_views_raw, 
                            numeric_columns=['engagements', 'impressions', 'media_views', 'weekly_reach'], 
-                           test_number=f"{platformID}_engage_8", 
+                           test_number=f"{platformID}_1e_08", 
                            test_step='Check no missing values in metric columns from redshift returned')
 
 # test for duplicate entries 
 test_functions.test_duplicates(ig_views_raw, 
                                ['Channel ID', 'w/c'], 
-                               test_number=f"{platformID}_engage_9", 
+                               test_number=f"{platformID}_1e_09",  
                                test_step='Check no duplicates from redshift returned')
 
 # General outlier check
 test_functions.test_outliers_general(ig_views_raw,
                       numeric_columns=['engagements', 'impressions', 'media_views', 'weekly_reach'],
-                      test_number=f"{platformID}_engage_10", 
+                      test_number=f"{platformID}_1e_10", 
                       test_step='Check for extreme outliers in metrics')
 
 # Outlier vs reference
@@ -183,9 +185,15 @@ reference_df['w/c'] = pd.to_datetime(reference_df['w/c'])
 test_functions.test_outliers_vs_reference(ig_views_raw, reference_df,
                              key_columns=['Channel ID', 'w/c'],
                              numeric_columns=['engagements', 'impressions', 'media_views', 'weekly_reach'],
-                             test_number=f"{platformID}_engage_11",
+                             test_number=f"{platformID}_1e_11",
                              test_step='Compare metrics to reference period')
 
+
+
+# In[7]:
+
+
+ig_views_raw[ig_views_raw['Channel ID'] == 'INS17841401898135827']
 
 
 # ## stale - temporary fix
@@ -227,14 +235,16 @@ ig_views_slim = ig_views_raw.merge(socialmedia_accounts[['Channel ID', 'ServiceI
                                                       on='Channel ID', how='left')
 test_functions.test_inner_join(ig_views_raw, socialmedia_accounts, 
                                ['Channel ID'], 
-                               f"{platformID}_engage_12",  
+                               f"{platformID}_1e_12", 
                                test_step='checking social media accounts in lookup, adding service',
-                               focus='left')
+                               focus='right')
 
 
 plays_factor = pd.read_excel("../data/stale/Instagram - Views to Reels Plays.xlsx", 
                              dtype={'IG Page ID': 'str'})\
                     .rename(columns={'IG Page ID': 'Channel ID'})[['Channel ID', 'reels_replay_factor']]
+
+# TODO 12 fails even though 06 passed - so here is an error introduced - find it and remedy it!
 
 
 # In[11]:
@@ -242,7 +252,7 @@ plays_factor = pd.read_excel("../data/stale/Instagram - Views to Reels Plays.xls
 
 test_functions.test_inner_join(ig_views_slim, plays_factor,
                                ['Channel ID'],
-                               f"{platformID}_engage_13", 
+                               f"{platformID}_1e_13", 
                                test_step='adding views to reels plays', focus='left')
 ig_views = ig_views_slim.merge(plays_factor, on=['Channel ID'], how='left')
 ig_views['reels_replay_factor'] = ig_views['reels_replay_factor'].fillna(plays_factor['reels_replay_factor'].mean())
@@ -250,7 +260,7 @@ ig_views['reels_replay_factor'] = ig_views['reels_replay_factor'].fillna(plays_f
 # missing values per week / page id 
 test_functions.test_non_null_and_positive(ig_views, 
                            numeric_columns=['reels_replay_factor'], 
-                           test_number=f"{platformID}_engage_14", 
+                           test_number=f"{platformID}_1e_14", 
                            test_step='Check no missing values in reels_replay_factor')
 ### 
 metrics = ['engagements', 'media_views', 'impressions', 'weekly_reach']
@@ -306,16 +316,4 @@ os.makedirs(file_path, exist_ok=True)
 cols = ['Channel ID', 'ServiceID', 'w/c', 'engaged_reach']
 ig_views.to_csv(f"{file_path}/{gam_info['file_timeinfo']}_{platformID}_engagements_final.csv", 
                           index=None)
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
 

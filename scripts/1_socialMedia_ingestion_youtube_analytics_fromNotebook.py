@@ -54,14 +54,18 @@ sys.path.insert(0, str(helper_path))
 # Now import your modules 
 from config import gam_info
 
-from functions import execute_sql_query
+from functions import lookup_loader
 import test_functions
 
 
 # In[4]:
 
 
-# week 
+lookup = lookup_loader(gam_info, platformID, '1e')
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
+
+'''# week 
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 
@@ -86,6 +90,7 @@ test_functions.test_lookup_files(week_tester, ['w/c'], [0,1,2],
 test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [3,4,5], 
                                  test_step = "lookup files - ensuring social media accounts is correct")
 
+'''
 
 
 # # Unique Viewers
@@ -159,6 +164,7 @@ combined_df['week_ending'] = combined_df['w/c'] + pd.to_timedelta(6 - combined_d
 
 combined_df['Channel Group'] = combined_df['Channel Group'].str.replace('.zip', '')
 combined_df = combined_df.rename(columns={'Channel': 'Channel ID'})
+combined_df['Channel ID'] = platformID+combined_df['Channel ID'] 
 
 # TODO: confirm what to do with the total (so far it's excluded at the inner join with social media accounts)
 combined_df = combined_df.loc[combined_df['Channel ID'] != 'Total']
@@ -205,7 +211,7 @@ for filename in os.listdir(path):
         try:
             file_path = os.path.join(path, filename)
             df = pd.read_excel(file_path, sheet_name='Totals')
-            df['Channel ID'] = filename.split('.')[0].split(' - ')[0]
+            df['Channel ID'] = platformID+filename.split('.')[0].split(' - ')[0]
             df['Channel title'] = filename.split('.')[0].split(' - ')[0]
             df['source_path'] = path+filename
             
@@ -249,8 +255,7 @@ full_uv_df = pd.concat([combined_df, media_action_df])
 print(full_uv_df.shape) #(7841, 14)
 
 # add service & service code info 
-youtube_uv = full_uv_df.merge(socialmedia_accounts[['Channel ID', 'Channel Name',  
-                                                    'ServiceID', 'ServiceID']],
+youtube_uv = full_uv_df.merge(socialmedia_accounts[['Channel ID', 'Channel Name', 'ServiceID']],
                               on='Channel ID' , how='left')
 
 youtube_uv['Unique viewers'] = youtube_uv['Unique viewers'].fillna(0)
@@ -268,17 +273,34 @@ youtube_uv.drop(columns=['week_ending'], inplace=True)
 # In[10]:
 
 
+channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
 ################################### Testing ################################### 
 test_step = 'combine CMS & non CMS'
 # test accounts
-test_functions.test_filter_elements_returned(youtube_uv, channel_ids, 'Channel ID', f"7_{platformID}_engagements", test_step)
+test_functions.test_filter_elements_returned(youtube_uv, 
+                                             channel_ids, 
+                                             'Channel ID', 
+                                             f"{platformID}_1e_07", 
+                                             test_step)
 # test weeks 
-test_functions.test_weeks_presence_per_account('w/c', 'Channel ID', youtube_uv, week_tester, f"8_{platformID}_engagements", test_step)
+test_functions.test_weeks_presence_per_account('w/c', 
+                                               'Channel ID', 
+                                               youtube_uv, 
+                                               week_tester, 
+                                               socialmedia_accounts,
+                                               f"{platformID}_1e_08", 
+                                               test_step)
 # test duplicates
 cols= ['Channel ID', 'Channel title', 'Channel Group', 'w/c',]
-test_functions.test_duplicates(youtube_uv, cols, f"9_{platformID}_engagements", test_step)
+test_functions.test_duplicates(youtube_uv, 
+                               cols, 
+                               f"{platformID}_1e_09", 
+                               test_step)
 
-test_functions.test_merge_row_count(youtube_uv, full_uv_df, f"10_{platformID}_engagements", test_step)
+test_functions.test_merge_row_count(youtube_uv, 
+                                    full_uv_df, 
+                                    f"{platformID}_1e_10", 
+                                    test_step)
 
 ################################### Testing ################################### 
 

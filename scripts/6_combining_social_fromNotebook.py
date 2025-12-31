@@ -662,3 +662,9 @@ final_annual_df['Reach'] = final_annual_df['Reach'] / number_of_weeks
 final_annual_df.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_annual_{platformID}.csv", 
                        index=None)
 
+
+# In[ ]:
+
+
+
+

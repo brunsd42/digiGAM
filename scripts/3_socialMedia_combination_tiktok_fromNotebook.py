@@ -45,7 +45,7 @@ sys.path.insert(0, str(helper_path))
 from config import gam_info
 
 from security_config import emplifi_key
-from functions import calculate_rolling_avg_country_split, gnl_expander
+from functions import lookup_loader, calculate_rolling_avg_country_split, gnl_expander
 import test_functions
 import functions 
 
@@ -55,54 +55,30 @@ import functions
 
 platformID = 'TTK'
 
-# country
-country_cols = ['PlaceID',	'TikTok Codes', gam_info['population_column']]
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", 
-                              sheet_name='CountryID', usecols=country_cols, keep_default_na=False )
-
-# week 
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
-                            sheet_name='GAM Period', keep_default_na=False)
-week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-
-# social media accounts
-dtype_dict = {'Channel ID': 'str',
-              'Linked FB Account': 'str'}
-socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
-                                     sheet_name='Social Media Accounts new', keep_default_na=False)
-
-socialmedia_accounts = socialmedia_accounts[(socialmedia_accounts['PlatformID'] == platformID)
-                                            & 
-                                            (socialmedia_accounts['Status'] == 'active')]
-socialmedia_accounts = socialmedia_accounts.rename(columns={'Excluding UK': 'Channel Group'})
-
-channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
-formatted_channel_ids = ', '.join(f"'{channel_id}'" for channel_id in channel_ids)
+lookup = lookup_loader(gam_info, platformID, '3',
+                       with_country=True, country_col=['TikTok Codes'],
+                       with_pop_col=True)
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
+country_codes = lookup['country_codes']
 
 # service
 cols = ['ServiceID', 'Lumen']
 service_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", 
                               sheet_name='ServiceID', usecols=cols, keep_default_na=False )
-
-### RUN TESTS
-test_functions.test_lookup_files(country_codes, ['PlaceID'], [f"{platformID}_3_0", f"{platformID}_3_1", f"{platformID}_3_2"], 
-                                 test_step="lookup files - ensuring country codes is correct")
-
-test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_3_3", f"{platformID}_3_4", f"{platformID}_3_5"], 
-                                 test_step = "lookup files - ensuring week tester is correct")
-
-test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_3_6", f"{platformID}_3_7", f"{platformID}_3_8"], 
-                                 test_step = "lookup files - ensuring social media accounts is correct")
-
-
-test_functions.test_lookup_files(service_codes, ['ServiceID', 'Lumen'], [f"{platformID}_3_9", f"{platformID}_3_10", f"{platformID}_3_11"], 
+test_functions.test_lookup_files(service_codes, ['ServiceID', 'Lumen'], [f"{platformID}_3_09", f"{platformID}_3_10", f"{platformID}_3_11"], 
                                  test_step = "lookup files - ensuring service is correct")
 
+
+# In[4]:
+
+
+socialmedia_accounts.sample()
 
 
 # # read in 
 
-# In[4]:
+# In[5]:
 
 
 cols_that_must_not_be_empty = ['author', 'insights_viewers_by_country',
@@ -139,7 +115,7 @@ for f in csv_files:
             
         df["platformID"] = platformID
         df["profile_id"] = profile_id
-        df["w/c"] = week_str
+        df["w/c"] = pd.to_datetime(week_str)
         
         if not df.empty:
             dataframes.append(df)
@@ -155,7 +131,7 @@ else:
     print("🚫 No valid data found to combine.")
 
 
-# In[5]:
+# In[6]:
 
 
 post_level_df = post_level_df.rename(columns={'platformID': 'PlatformID'})
@@ -173,16 +149,8 @@ print(week_counts)
 # Create a pivot table: profiles as rows, weeks as columns
 pivot_df = post_level_df.pivot_table(columns='profile_id', index='w/c', aggfunc='size')
 
-# Convert to boolean: True = data exists, False = missing
-#pivot_df = pivot_df.astype(bool)
 
-# Visualize missing data
-#msno.matrix(pivot_df)
-#plt.title("Missing Weeks per TikTok Profile")
-#plt.show()
-
-
-# In[6]:
+# In[7]:
 
 
 def extract_author_info(row):
@@ -200,7 +168,7 @@ def extract_author_info(row):
         return pd.Series({'id': None, 'name': None, 'url': None})
 
     return pd.Series({
-        'id': author_dict.get('id'),
+        'id': platformID+author_dict.get('id'),
         'name': author_dict.get('name'),
         'url': author_dict.get('url')
     })
@@ -209,15 +177,46 @@ def extract_author_info(row):
 post_level_df[["Channel ID", "Channel Name", "Channel URL"]] = post_level_df['author'].apply(extract_author_info)
 
 
-# In[7]:
+# In[8]:
 
 
-post_level_df['w/c'].sort_values().unique()
+channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
+
+### RUN TESTS
+# missing page_ids
+test_functions.test_filter_elements_returned(post_level_df, 
+                                             channel_ids, 
+                                             'Channel ID', 
+                                             f"{platformID}_3_12",
+                                             "Check that all page IDs are found in SQL")
+
+
+# missing weeks per page_id
+test_functions.test_weeks_presence_per_account(key='w/c',
+                                               channel_id_col='Channel ID',
+                                               main_data=post_level_df,
+                                               week_lookup=week_tester[['w/c']],
+                                               channel_lookup=socialmedia_accounts[['Channel ID', 'Start', 'End']],
+                                               test_number=f"{platformID}_3_13",
+                                               test_step="Check all weeks present for each account")
+
+# missing values per week / page id 
+metrics_to_test = ['insights_avg_time_watched', 'duration', 'insights_reach',
+                   'insights_completion_rate']
+test_functions.test_non_null_and_positive(post_level_df, 
+                           numeric_columns=metrics_to_test, 
+                           test_number=f"{platformID}_3_14",
+                           test_step='Check no missing values in page fans column from redshift returned')
+
+# test for duplicate entries 
+test_functions.test_duplicates(post_level_df, ['Channel ID', 'w/c', 'link'], 
+                               test_number=f"{platformID}_3_15",
+                               test_step='Check no duplicates from redshift returned')
 
 
 # # Views
 
-# In[8]:
+# In[9]:
 
 
 minnie_cols_used = {'Date': 'w/c', #minnie has a day by day breakdown and then calculates the average
@@ -249,7 +248,7 @@ views_df['content_id'] = views_df['link'].str.split('/').str[-1].str.split('?').
 views_df.head()
 
 
-# In[9]:
+# In[10]:
 
 
 # optional: test video length is all in seconds
@@ -262,7 +261,7 @@ cols_fill_nan = ['insights_avg_time_watched', 'duration', 'insights_reach',
 views_df[cols_fill_nan] = views_df[cols_fill_nan].fillna(0)  # or any other value you'd like
 
 
-# In[10]:
+# In[11]:
 
 
 # Define x and y values for each row
@@ -311,14 +310,6 @@ views_df['final_video_views'] = np.select(conditions, choices,
                                             default=views_df['30sec_video_views'])
 
 
-# In[11]:
-
-
-'''views_df[
-    (views_df['Channel ID'] == 'c02ca653-c3b6-4b34-b210-711e12f9eb2d') &
-    (views_df['w/c'] == '2025-08-04') ].sort_values('final_video_views', ascending=False)'''
-
-
 # In[12]:
 
 
@@ -326,7 +317,7 @@ views_df_full = views_df.merge(socialmedia_accounts[['Channel ID', 'ServiceID', 
                on='Channel ID', how='left')
 test_functions.test_inner_join(views_df, socialmedia_accounts[['Channel ID', 'ServiceID', 'Linked FB Account']], 
                                ['Channel ID'], 
-                               f"12_{platformID}_engagements", 
+                               f"{platformID}_3_16", 
                                test_step='checking social media accounts in lookup, adding service',
                                focus='left')
 
@@ -537,12 +528,6 @@ combined_data = combined_data.merge(country_codes[['PlaceID', gam_info['populati
 # In[21]:
 
 
-merged_country_avg[merged_country_avg['_merge'] == 'left_only']
-
-
-# In[22]:
-
-
 # 10. Apply Sainsbury formula for country-level views
 deduplicated_datasets = []
 for channel in tqdm(combined_data['Channel ID'].unique()):
@@ -571,7 +556,7 @@ dedupli_df = pd.concat(deduplicated_datasets)
         
 
 
-# In[23]:
+# In[22]:
 
 
 # 11. Aggregate to profile level (country-specific)
@@ -612,7 +597,7 @@ ttk_df['uv_by_country'] = (
 )
 
 
-# In[24]:
+# In[23]:
 
 
 print(ttk_df.shape)
@@ -622,28 +607,4 @@ print(ttk_df.shape)
 cols = ['w/c', 'PlaceID', 'ServiceID', 'Channel ID', 'uv_by_country', ]
 ttk_df[cols].to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv", 
                      index=None)
-
-
-# In[25]:
-
-
-ttk_df[ttk_df['w/c'] == '2025-12-01']['ServiceID'].unique()
-
-
-# In[26]:
-
-
-ttk_df[ttk_df['w/c'] == '2025-11-24']['ServiceID'].unique()
-
-
-# In[27]:
-
-
-ttk_df['w/c'].sort_values().unique()
-
-
-# In[ ]:
-
-
-
 

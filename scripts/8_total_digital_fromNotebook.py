@@ -766,7 +766,7 @@ wt_pod_df_annual.to_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_a
 cols = ['YearGAE', 'w/c', 'ServiceID', 'PlatformID', 'PlaceID', 'Reach']
 
 
-# In[ ]:
+# In[37]:
 
 
 podcast_df = pd.read_excel(f"../data/singlePlatform/podcast/weekly/{gam_info['file_timeinfo']}_podcast_data_weekly.xlsx")
@@ -775,7 +775,7 @@ podcast_df['w/c'] = podcast_df['w/c'].dt.strftime('%Y-%m-%d')
 podcast_df = podcast_df[cols]
 
 
-# In[ ]:
+# In[38]:
 
 
 try:
@@ -788,7 +788,7 @@ except:
     site_df = pd.DataFrame()
 
 
-# In[ ]:
+# In[39]:
 
 
 # created from platform in 6.
@@ -804,7 +804,7 @@ social_wsc_df = social_wsc_df[cols]
 social_wsc_df.head()
 
 
-# In[ ]:
+# In[40]:
 
 
 # created from dataset per platform file in 5.
@@ -815,7 +815,7 @@ social_platforms_df = social_platforms_df[cols]
 social_platforms_df.head()
 
 
-# In[ ]:
+# In[41]:
 
 
 css_df = pd.read_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_CSS.csv")[cols]
@@ -823,7 +823,7 @@ css_df['w/c'] = pd.to_datetime(css_df['w/c']).dt.strftime('%Y-%m-%d')
 css_df.head()
 
 
-# In[ ]:
+# In[42]:
 
 
 wt_df = pd.read_csv(f"../data/combinePlatforms/{gam_info['file_timeinfo']}_weekly_WT-.csv")[cols]
@@ -833,7 +833,7 @@ wt_df.head()
 
 # # combine 
 
-# In[ ]:
+# In[43]:
 
 
 sources = {'pod': podcast_df, 
@@ -893,19 +893,19 @@ else:
     print("Warning: Test logbook not found!")
 
 
-# In[ ]:
+# In[44]:
 
 
 # add a test - for all platform services and weeks is there a gap? 
 
 
-# In[ ]:
+# In[45]:
 
 
-digital_df[digital_df['w/c'] == '2025-12-08']['PlatformID'].unique()
+digital_df[(digital_df['w/c'] == '2025-12-08') & (digital_df['PlatformID'] == 'FBE')]['ServiceID'].unique()
 
 
-# In[ ]:
+# In[46]:
 
 
 digital_df['PlatformID'].unique()

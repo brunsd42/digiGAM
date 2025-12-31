@@ -41,7 +41,7 @@ sys.path.insert(0, str(helper_path))
 from config import gam_info
 
 from security_config import emplifi_key
-from functions import execute_sql_query
+from functions import lookup_loader
 import test_functions
 
 
@@ -49,8 +49,12 @@ import test_functions
 
 
 platformID = 'TTK'
+lookup = lookup_loader(gam_info, platformID, '1',)
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
 
-# country
+
+'''# country
 country_cols = ['PlaceID',	'TikTok Codes']
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", 
                               sheet_name='CountryID', usecols=country_cols, keep_default_na=False )
@@ -82,6 +86,7 @@ test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_1_3", f"{
 
 test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_1_6", f"{platformID}_1_7", f"{platformID}_1_8"], 
                                  test_step = "lookup files - ensuring social media accounts is correct")
+'''
 
 
 # # ingest data
@@ -197,7 +202,6 @@ def get_post_level_insights(start_date, end_date, profile_id, headers):
 # Directory to store weekly data
 storage_dir = f"../data/raw/{platformID}/post_level/"
 os.makedirs(storage_dir, exist_ok=True)
-
 
 MAX_CALLS = 500
 PERIOD = 3600  # seconds (1 hour)
