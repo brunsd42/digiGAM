@@ -55,7 +55,18 @@ import functions
 # In[4]:
 
 
-# country
+pop_size_col = gam_info['population_column']
+
+lookup = functions.lookup_loader(gam_info, platformID, '4',
+                       with_country=True, with_pop_col=True)
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
+country_codes = lookup['country_codes']
+
+# overlaps 
+overlaps = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='overlap')
+
+'''# country
 pop_size_col = gam_info['population_column']
 country_cols = ['PlaceID', pop_size_col]
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
@@ -89,6 +100,7 @@ test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_4_3", f"{
 
 test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_4_6", f"{platformID}_4_7", f"{platformID}_4_8"], 
                                  test_step = "lookup files - ensuring social media accounts is correct")
+'''
 
 
 # ## import data 
@@ -97,7 +109,7 @@ test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platf
 
 
 full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_uniqueViewer_country.csv")
-full_df['Channel ID'] = full_df['Channel ID'].apply(lambda x: str(int(x)))
+
 full_df = full_df.merge(country_codes, on='PlaceID', 
                         how='left', indicator=True)
 print(full_df._merge.value_counts())

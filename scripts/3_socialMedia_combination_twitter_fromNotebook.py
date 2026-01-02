@@ -50,7 +50,7 @@ import test_functions
 
 
 lookup = lookup_loader(gam_info, platformID, '3',
-                       with_country=True, country_col='TWI_CountryName')
+                       with_country=True, country_col=['TWI_CountryName'])
 week_tester = lookup['week_tester']
 socialmedia_accounts = lookup['socialmedia_accounts']
 country_codes = lookup['country_codes']

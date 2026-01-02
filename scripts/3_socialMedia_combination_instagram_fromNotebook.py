@@ -39,13 +39,21 @@ sys.path.insert(0, str(helper_path))
 # Now import your modules 
 from config import gam_info
 import test_functions 
-from functions import calculate_rolling_avg_country_split
+from functions import lookup_loader, calculate_rolling_avg_country_split
 
 
 # In[4]:
 
 
-# country
+lookup = lookup_loader(gam_info, platformID, '3',
+                       with_country=True, country_col=['YT-_FBE_codes'],
+                      with_pop_col=True)
+week_tester = lookup['week_tester']
+socialmedia_accounts = lookup['socialmedia_accounts']
+country_codes = lookup['country_codes']
+
+
+'''# country
 country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID', 
                               keep_default_na=False)
 
@@ -66,6 +74,7 @@ test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_3_3", f"{
 test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_3_6", f"{platformID}_3_7", f"{platformID}_3_8"], 
                                  test_step = "lookup files - ensuring social media accounts is correct")
 
+'''
 
 
 # # ingest 
@@ -76,7 +85,7 @@ test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platf
 engagements = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_engagements_final.csv",)
                                              
 engagements['w/c'] = pd.to_datetime(engagements['w/c'])
-engagements['Channel ID'] = engagements['Channel ID'].dropna().apply(lambda x: str(int(x)))
+engagements['Channel ID'] = engagements['Channel ID'].dropna()
 engagements = engagements.dropna(subset=['ServiceID'])
 engagements.sort_values(by='w/c')['w/c'].unique()
 
@@ -88,7 +97,7 @@ country = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo'
                      keep_default_na=False)
 country['w/c'] = pd.to_datetime(country['w/c'])
 country['PlatformID'] = platformID
-country['Channel ID'] = country['Channel ID'].dropna().apply(lambda x: str(int(x)))
+country['Channel ID'] = country['Channel ID'].dropna()
 country.sample()
 
 
