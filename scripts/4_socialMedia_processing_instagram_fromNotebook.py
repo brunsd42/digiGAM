@@ -101,7 +101,6 @@ full_df = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo'
 # In[6]:
 
 
-full_df['Channel ID'] = full_df['Channel ID'].apply(lambda x: str(int(x)))
 print(full_df.shape)
 
 full_df = full_df.merge(country_codes, on='PlaceID', 
@@ -250,7 +249,7 @@ combined_weekly.sample()
 combined_weekly['PlatformID'] = platformID
 # SERVICE hierarchy issues
 test_step = "calculated high-level services"
-service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_9", 
+service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_09", 
                                                                'Service', 
                                                                gam_info, 
                                                                combined_weekly, 
@@ -260,7 +259,7 @@ service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_
                                                                 round_metric=True)
 
 
-# In[16]:
+# In[12]:
 
 
 ax2_services = [

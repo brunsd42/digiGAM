@@ -109,7 +109,8 @@ main_path = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_export/"
 folder_paths = [f for f in os.listdir(main_path) if os.path.isdir(os.path.join(main_path, f))]
 
 ### TESTING input files ### 
-test_functions.youtube_test_input_files(f'6_{platformID}_engagements', folder_paths, main_path, week_tester, 
+test_functions.youtube_test_input_files(f'{platformID}_1e_06', folder_paths, 
+                                        main_path, week_tester, 
                                         test_step='testing automated extracts')
 
 

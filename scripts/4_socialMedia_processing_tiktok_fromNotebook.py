@@ -255,7 +255,7 @@ combined_weekly.sample()
 combined_weekly['PlatformID'] = platformID
 # SERVICE hierarchy issues
 test_step = "calculated high-level services"
-service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_9", 
+service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_09", 
                                                                'Service', 
                                                                gam_info, 
                                                                combined_weekly, 

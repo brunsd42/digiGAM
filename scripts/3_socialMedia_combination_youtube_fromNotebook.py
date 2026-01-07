@@ -142,7 +142,7 @@ test_step = 'merging uv & country'
 
 test_functions.test_inner_join(uniqueViewer_df, country_df, 
                                ['Channel ID', 'w/c'], 
-                               f"9_{platformID}_combination", test_step)
+                               f"{platformID}_3_09", test_step)
 
 ################################### Testing ################################### 
 

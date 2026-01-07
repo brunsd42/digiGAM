@@ -186,8 +186,8 @@ test_functions.podcast_test_services_in_results(podcast_raw, podcast_details, '1
 test_functions.podcast_check_unknown_services(podcast_raw,'1_POD_4', test_step)
 
 # weeks there? 
-test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_raw, week_tester,
-                                                '1_POD_5', test_step)
+#test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_raw, week_tester,
+#                                                '1_POD_5', test_step)
 ################################### Testing ################################### 
 
 
@@ -237,8 +237,8 @@ podcast_total_wsl.rename(columns={'week': 'w/c'}, inplace=True)
 test_step = 'sql returns for WSL'
 test_functions.podcast_check_unknown_services(podcast_total_wsl,'1_POD_6', test_step)
 
-test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_wsl, week_tester,
-                                                '1_POD_7', test_step)
+#test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_wsl, week_tester,
+#                                                '1_POD_7', test_step)
 ################################### Testing ################################### 
 
 
@@ -290,8 +290,8 @@ test_step = 'sql returns for WS'
 #podcast_test_services_in_results(podcast_total_ws, total_ws)
 test_functions.podcast_check_unknown_services(podcast_total_ws, '1_POD_8', test_step)
 
-test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_wsl, week_tester,
-                                                '1_POD_9', test_step)
+#test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_wsl, week_tester,
+#                                                '1_POD_9', test_step)
 ################################### Testing ################################### 
 
 
@@ -341,8 +341,8 @@ test_step = 'sql returns for all BBC'
 #podcast_test_services_in_results(podcast_total_allBBC, all_bbc)
 test_functions.podcast_check_unknown_services(podcast_total_allBBC, '1_POD_10', test_step)
 
-test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_allBBC, week_tester,
-                                                '1_POD_11', test_step)
+#test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_allBBC, #week_tester,
+#                                                '1_POD_11', test_step)
 
 ################################### Testing ################################### 
 

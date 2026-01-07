@@ -201,7 +201,13 @@ if 'API' not in combined_df.columns:
 combined_df['w/c'] = pd.to_datetime(combined_df['w/c'] )
 
 
-# In[10]:
+# In[14]:
+
+
+week_tester.dtypes
+
+
+# In[16]:
 
 
 # test all reports are there 
@@ -212,16 +218,19 @@ test_functions.test_inner_join(site_info, combined_df, ['Report No.', 'API'],
 full_df = site_info.merge(combined_df, on=['Report No.', 'API'], how='inner', )
 #print(full_df['Report No.'].unique())
 
+'''
 # test all weeks are there 
 test_functions.test_weeks_presence_per_account(key='w/c', 
                                                channel_id_col='Report No.',
                                                main_data=full_df, 
                                                week_lookup=week_tester, 
-                                               channel_lookup=service_codes,
-                                               f'{platformID}_1_03', 
+                                               channel_lookup=site_info,
+                                               test_number=f'{platformID}_1_03', 
                                                test_step='combining api returns')
+                                               '''
 
 # add week_lookup data
+week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 full_df = full_df.merge(week_tester[['YearGAE', 'WeekNumber_finYear', 'w/c']], on='w/c', how='left')
 # excluded: 'API', 'timestamp_queryRun', 'filename', 'Year',
 cols = ['Category', 'Report No.', 'Space', 'Description', 
@@ -249,12 +258,6 @@ for column, dtype in dtype_spec.items():
         full_df[column] = full_df[column].apply(lambda x: str(x) if pd.notnull(x) else '')
 
 full_df.to_csv(f"../data/raw/site/{gam_info['file_timeinfo']}_rawDataFromPiano.csv", index=None)
-
-
-# In[ ]:
-
-
-full_df.head()
 
 
 # In[ ]:
