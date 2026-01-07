@@ -1,0 +1,36 @@
+
+/* Use your colour #2980b9 as the primary accent */
+:root {
+    --primary-color: #2980b9;
+}
+
+/* Links */
+/* RTD theme uses .wy-nav-content a and .wy-menu a */
+.wy-nav-content a {
+    color: var(--primary-color);
+}
+
+.wy-menu-vertical li.current > a {
+    color: var(--primary-color);
+}
+
+/* Headings */
+h1, h2, h3 {
+    color: var(--primary-color);
+}
+
+/* Admonition titles (notes, warnings, tips) */
+.admonition-title {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Code block titles (if used with extensions) */
+.rst-content .code-block-caption {
+    color: var(--primary-color);
+}
+
+/* Highlight active menu section */
+.wy-menu-vertical li.current > a {
+    border-left: 3px solid var(--primary-color);
+}
