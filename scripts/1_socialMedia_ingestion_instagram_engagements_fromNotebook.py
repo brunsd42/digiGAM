@@ -147,7 +147,7 @@ test_functions.test_filter_elements_returned(ig_views_raw,
                                              "Check that all page IDs are found in SQL")
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               channel_id_col='Channel ID',
+                                               channel_id_col=['Channel ID'],
                                                main_data=ig_views_raw,
                                                week_lookup=week_tester[['w/c']],
                                                channel_lookup=socialmedia_accounts[['Channel ID', 'Start', 'End']],
@@ -198,7 +198,7 @@ ig_views_raw[ig_views_raw['Channel ID'] == 'INS17841401898135827']
 
 # ## stale - temporary fix
 
-# In[8]:
+# In[15]:
 
 
 path = "../data/stale/IG Profile Engagement Metrics - Weekly GAM 2026.xlsx"
@@ -210,7 +210,7 @@ stale_engagements = stale_engagements.rename(columns={
     "Impressions": "impressions",
     "views": "media_views"
 })
-stale_engagements['Channel ID'] = stale_engagements['Channel ID'].dropna().apply(lambda x: str(int(x)))
+stale_engagements['Channel ID'] =platformID+stale_engagements['Channel ID'].dropna().apply(lambda x: str(int(x)))
 stale_engagements['w/c'] = pd.to_datetime(stale_engagements['w/c'])
 
 until_date = "2025-11-10"
@@ -220,7 +220,7 @@ ig_views_raw = pd.concat([stale_engagements, ig_views_raw[ig_views_raw['w/c'] >=
                         ignore_index=True)
 
 
-# In[9]:
+# In[16]:
 
 
 # add data different to reference sheet
@@ -228,7 +228,7 @@ ig_views_raw = pd.concat([stale_engagements, ig_views_raw[ig_views_raw['w/c'] >=
 # missing week? replace with value from reference
 
 
-# In[10]:
+# In[17]:
 
 
 ig_views_slim = ig_views_raw.merge(socialmedia_accounts[['Channel ID', 'ServiceID']], 
@@ -247,7 +247,7 @@ plays_factor = pd.read_excel("../data/stale/Instagram - Views to Reels Plays.xls
 # TODO 12 fails even though 06 passed - so here is an error introduced - find it and remedy it!
 
 
-# In[11]:
+# In[18]:
 
 
 test_functions.test_inner_join(ig_views_slim, plays_factor,
@@ -298,7 +298,7 @@ ig_views.loc[mask_persian, 'engaged_reach'] = ((ig_views.loc[mask_persian, 'enga
 ig_views['engaged_reach'] = ig_views['engaged_reach'].clip(upper=ig_views['weekly_reach'])
 
 
-# In[12]:
+# In[19]:
 
 
 ig_views[(ig_views['ServiceID'] == 'PER') & 
@@ -307,7 +307,13 @@ ig_views[(ig_views['ServiceID'] == 'PER') &
     ]#['uv_by_country'].sum()
 
 
-# In[13]:
+# In[20]:
+
+
+ig_views['w/c'].value_counts()
+
+
+# In[21]:
 
 
 file_path = f"../data/processed/{platformID}"
@@ -316,4 +322,10 @@ os.makedirs(file_path, exist_ok=True)
 cols = ['Channel ID', 'ServiceID', 'w/c', 'engaged_reach']
 ig_views.to_csv(f"{file_path}/{gam_info['file_timeinfo']}_{platformID}_engagements_final.csv", 
                           index=None)
+
+
+# In[ ]:
+
+
+
 

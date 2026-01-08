@@ -116,7 +116,7 @@ test_functions.test_filter_elements_returned(telegram_df,
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               id_column='Channel ID',
+                                               id_column=['Channel ID'],
                                                main_data=telegram_df,
                                                week_lookup=week_tester[['w/c']],
                                                test_number=f"{platformID}_3_10",

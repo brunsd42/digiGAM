@@ -151,7 +151,7 @@ print(reach_df.shape)
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               channel_id_col='Channel ID',
+                                               channel_id_col=['Channel ID'],
                                                main_data=reach_df,
                                                week_lookup=week_tester[['w/c']],
                                                channel_lookup=socialmedia_accounts,

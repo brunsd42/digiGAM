@@ -235,7 +235,7 @@ combined_weekly = pd.concat(
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               channel_id_col='ServiceID',
+                                               channel_id_col=['ServiceID'],
                                                main_data=combined_weekly,
                                                week_lookup=week_tester[['w/c']],
                                                channel_lookup=socialmedia_accounts[['ServiceID', 'Start', 'End']],

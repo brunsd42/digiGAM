@@ -107,7 +107,7 @@ test_functions.test_filter_elements_returned(twitter_activity,
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               channel_id_col='Channel ID',
+                                               channel_id_col=['Channel ID'],
                                                main_data=twitter_activity,
                                                week_lookup=week_tester[['w/c']],
                                                channel_lookup=socialmedia_accounts,

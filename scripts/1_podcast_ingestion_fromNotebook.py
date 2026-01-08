@@ -45,6 +45,11 @@ country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Co
 week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
 week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
 
+today = pd.Timestamp.today().normalize()
+last_complete_wcmonday = (today - pd.Timedelta(days=today.weekday() + 7)).normalize()
+week_tester = week_tester[week_tester['w/c'] <= last_complete_wcmonday]
+
+
 # podcast details
 podcast_details = pd.read_excel(f"../../{gam_info['lookup_file']}", 
                                      sheet_name='Podcast').dropna(how='all')
@@ -57,9 +62,15 @@ test_functions.test_lookup_files(week_tester, ['w/c'], [3,4,5],
                                  test_step = "lookup files - ensuring week tester is correct")
 
 
+# In[4]:
+
+
+week_tester.tail()
+
+
 # ## helper functions
 
-# In[4]:
+# In[5]:
 
 
 def get_formatted_values(df, query_type):
@@ -77,7 +88,7 @@ def generate_when_clauses(df):
     return when_clause_brands, when_clause_programmes
 
 
-# In[5]:
+# In[6]:
 
 
 def execute_sql_query_with_output(sql_query, file_timeinfo, output_filename):
@@ -97,7 +108,7 @@ def execute_sql_query_with_output(sql_query, file_timeinfo, output_filename):
 
 # ## test I find all the programes
 
-# In[6]:
+# In[7]:
 
 
 # Cell 1: Construct and execute the first query
@@ -114,7 +125,7 @@ sql_query_1 = f"""SELECT
                     redshiftdb.prez.scv_vmb vmb 
                     ON prd.version_id = vmb.version_id
                 WHERE 
-                    prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{gam_info['weekEnding_end']}'
+                    prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{week_tester['week_ending'].max()}'
                     AND (
                         vmb.master_brand_id IN ({formatted_brand_ids})
                     OR 
@@ -143,7 +154,7 @@ test_functions.test_filter_elements_returned(test_df, program_titles, column_nam
 
 # ## Individual language services 
 
-# In[7]:
+# In[8]:
 
 
 #Construct and execute the second query
@@ -166,7 +177,7 @@ sql_query_2 = f"""
     INNER JOIN redshiftdb.prez.scv_vmb vmb 
         ON prd.version_id = vmb.version_id
     WHERE 
-        prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{gam_info['weekEnding_end']}'
+        prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{week_tester['week_ending'].max()}'
         AND (
         vmb.master_brand_id IN ({formatted_brand_ids})
         OR 
@@ -186,15 +197,20 @@ test_functions.podcast_test_services_in_results(podcast_raw, podcast_details, '1
 test_functions.podcast_check_unknown_services(podcast_raw,'1_POD_4', test_step)
 
 # weeks there? 
-#test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_raw, week_tester,
-#                                                '1_POD_5', test_step)
+'''test_functions.test_weeks_presence_per_account('w/c', 
+                                               'service', 
+                                               podcast_raw, 
+                                               week_tester,
+                                               podcast_details,
+                                               'POD_1_5', 
+                                               test_step)'''
 ################################### Testing ################################### 
 
 
 # ## BBC World Service Languages
 # 
 
-# In[8]:
+# In[9]:
 
 
 # Cell 3: Construct and execute the third query with WSL filter
@@ -219,7 +235,7 @@ sql_query_3 = f"""
     INNER JOIN redshiftdb.prez.scv_vmb vmb 
         ON prd.version_id = vmb.version_id
     WHERE 
-        prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{gam_info['weekEnding_end']}'
+        prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{week_tester['week_ending'].max()}'
         AND (
         vmb.master_brand_id IN ({formatted_brand_ids})
         OR 
@@ -237,14 +253,19 @@ podcast_total_wsl.rename(columns={'week': 'w/c'}, inplace=True)
 test_step = 'sql returns for WSL'
 test_functions.podcast_check_unknown_services(podcast_total_wsl,'1_POD_6', test_step)
 
-#test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_wsl, week_tester,
-#                                                '1_POD_7', test_step)
+'''test_functions.test_weeks_presence_per_account('w/c', 
+                                               'service', 
+                                               podcast_total_wsl, 
+                                               week_tester,
+                                               podcast_details,
+                                               'POD_1_7', 
+                                               test_step)'''
 ################################### Testing ################################### 
 
 
 # ## BBC World Service 
 
-# In[9]:
+# In[10]:
 
 
 # Filter the DataFrame based on '* BBC World Service'
@@ -275,7 +296,7 @@ sql_query = f"""
     INNER JOIN redshiftdb.prez.scv_vmb vmb 
         ON prd.version_id = vmb.version_id
     WHERE 
-        prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{gam_info['weekEnding_end']}'
+        prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{week_tester['week_ending'].max()}'
     GROUP BY week, service, country
     HAVING service != 'UKPS GB'
 ;
@@ -290,14 +311,19 @@ test_step = 'sql returns for WS'
 #podcast_test_services_in_results(podcast_total_ws, total_ws)
 test_functions.podcast_check_unknown_services(podcast_total_ws, '1_POD_8', test_step)
 
-#test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_wsl, week_tester,
-#                                                '1_POD_9', test_step)
+'''test_functions.test_weeks_presence_per_account('w/c', 
+                                               'service', 
+                                               podcast_total_wsl, 
+                                               week_tester,
+                                               podcast_details,
+                                               'POD_1_9', 
+                                               test_step)'''
 ################################### Testing ################################### 
 
 
 # ## all BBC 
 
-# In[10]:
+# In[11]:
 
 
 # Filter the DataFrame based on '* BBC World Service'
@@ -306,7 +332,7 @@ all_bbc = podcast_details[podcast_details['* All BBC'] == True]
 # Generate the formatted brand IDs and program titles
 formatted_brand_ids = get_formatted_values(all_bbc, 'brand_id')
 formatted_program_titles = get_formatted_values(all_bbc, 'program_title')
-
+    
 # Construct the SQL query
 sql_query = f"""
     SELECT DATE_TRUNC('week', prd.date_utc) AS week,
@@ -326,7 +352,7 @@ sql_query = f"""
     INNER JOIN redshiftdb.prez.scv_vmb vmb 
         ON prd.version_id = vmb.version_id
     WHERE 
-        prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{gam_info['weekEnding_end']}'
+        prd.date_utc BETWEEN '{gam_info['w/c_start']}' AND '{week_tester['week_ending'].max()}'
     GROUP BY week, service, country
 ;
 """
@@ -340,15 +366,9 @@ test_step = 'sql returns for all BBC'
 
 #podcast_test_services_in_results(podcast_total_allBBC, all_bbc)
 test_functions.podcast_check_unknown_services(podcast_total_allBBC, '1_POD_10', test_step)
-
-#test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_allBBC, #week_tester,
-#                                                '1_POD_11', test_step)
-
+'''
+test_functions.test_weeks_presence_per_account('w/c', 'service', podcast_total_allBBC, week_tester,
+                                                '1_POD_11', test_step)
+'''
 ################################### Testing ################################### 
-
-
-# In[ ]:
-
-
-
 

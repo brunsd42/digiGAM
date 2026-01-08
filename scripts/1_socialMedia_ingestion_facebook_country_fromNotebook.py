@@ -102,7 +102,7 @@ test_functions.test_filter_elements_returned(facebook_country_raw,
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               channel_id_col='Channel ID',
+                                               channel_id_col=['Channel ID'],
                                                main_data=facebook_country_raw,
                                                week_lookup=week_tester[['w/c']],
                                                channel_lookup=socialmedia_accounts[['Channel ID', 'Start', 'End']],
@@ -244,7 +244,7 @@ result_df = result_df[cols].drop_duplicates().dropna(subset='country_%')
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               channel_id_col='Channel ID',
+                                               channel_id_col=['Channel ID'],
                                                main_data=result_df,
                                                week_lookup=week_tester[['w/c']],
                                                channel_lookup=socialmedia_accounts[['Channel ID', 'Start', 'End']],

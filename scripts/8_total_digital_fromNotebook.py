@@ -175,7 +175,7 @@ test_columns = {
 
 for i, (column, allowed_values) in enumerate(test_columns.items(), start=5):
     print(column)
-    label = f"total_digi_{i}"
+    label = f"total_digi_0{i}"
     test_functions.test_allowed_values(social_weekly_df, column, allowed_values, label, 'social_ingest')
 social_weekly_df.head()
 
@@ -865,8 +865,58 @@ output_dir = "../data/final"
 os.makedirs(output_dir, exist_ok=True)
 
 digital_df['w/c'] = pd.to_datetime(digital_df['w/c']).dt.strftime('%Y-%m-%d')
-digital_df = digital_df[digital_df['w/c'] < '2025-12-15']
 digital_df = digital_df[digital_df['ServiceID'] != 'AXE']
+
+
+# In[44]:
+
+
+digital_df[digital_df['w/c'] == '2026-01-05']['PlatformID'].unique()
+
+
+# In[45]:
+
+
+test_combi = digital_df[digital_df['Reach'].fillna(0) > 0]
+
+test_combi = test_combi[['PlatformID', 'ServiceID']].drop_duplicates()
+test_combi['Start'] = digital_df['w/c'].min()
+test_combi['End'] = digital_df['w/c'].max()
+test_combi.head()
+
+
+# In[46]:
+
+
+digital_df.head()
+
+
+# In[47]:
+
+
+# missing platforms 
+
+# missing services 
+
+# missing weeks per page_id
+test_functions.test_weeks_presence_per_account(key='w/c',
+                                               channel_id_col=['ServiceID', 'PlatformID'],
+                                               main_data=digital_df,
+                                               week_lookup=week_tester[['w/c']],
+                                               channel_lookup=test_combi,
+                                               test_number=f"{platformID}_8_07",
+                                               test_step="Check all weeks present for each account")
+
+
+# In[50]:
+
+
+digital_df.tail()
+
+
+# In[49]:
+
+
 digital_df.to_csv(f"{output_dir}/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
                        index=None)
 digital_df.to_csv(f"../../../New Lumen 2025/Datasets/Raw/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
@@ -893,19 +943,19 @@ else:
     print("Warning: Test logbook not found!")
 
 
-# In[44]:
+# In[ ]:
 
 
 # add a test - for all platform services and weeks is there a gap? 
 
 
-# In[45]:
+# In[ ]:
 
 
 digital_df[(digital_df['w/c'] == '2025-12-08') & (digital_df['PlatformID'] == 'FBE')]['ServiceID'].unique()
 
 
-# In[46]:
+# In[ ]:
 
 
 digital_df['PlatformID'].unique()

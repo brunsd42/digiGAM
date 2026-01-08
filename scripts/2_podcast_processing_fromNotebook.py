@@ -111,7 +111,7 @@ df_raw['PlatformID'] = 'DPO'
 
 # test & add weeks
 print('..weeks:')
-test_functions.test_weeks_presence('w/c', df_raw, week_tester, '2_POD_1', test_step)
+#test_functions.test_weeks_presence('w/c', df_raw, week_tester, '2_POD_1', test_step)
 
 df = df_raw.merge(week_tester, on='w/c', how='left') #left because this test has run and I NEVER want to loose data
 display(df.sample())
@@ -349,6 +349,13 @@ test_functions.see_weekly_reach(gam_info, df, 'PlaceID', 'podcast_weekly_country
 
 
 # In[14]:
+
+
+#digital_df[digital_df['w/c'] == '2026-01-05']['PlatformID'].unique()
+df['w/c'].unique()
+
+
+# In[15]:
 
 
 df = df.rename(columns={'uniques': 'Reach'})

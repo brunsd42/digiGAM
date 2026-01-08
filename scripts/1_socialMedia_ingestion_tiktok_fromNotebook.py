@@ -54,41 +54,6 @@ week_tester = lookup['week_tester']
 socialmedia_accounts = lookup['socialmedia_accounts']
 
 
-'''# country
-country_cols = ['PlaceID',	'TikTok Codes']
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", 
-                              sheet_name='CountryID', usecols=country_cols, keep_default_na=False )
-
-# week 
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
-                            sheet_name='GAM Period', keep_default_na=False)
-
-week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-week_tester['week_ending'] = pd.to_datetime(week_tester['week_ending'])
-
-# social media accounts
-dtype_dict = {'Channel ID': 'str',
-              'Linked FB Account': 'str'}
-socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype=dtype_dict,
-                                     sheet_name='Social Media Accounts new', keep_default_na=False)
-
-socialmedia_accounts = socialmedia_accounts[(socialmedia_accounts['PlatformID'] == platformID)
-                                            & (socialmedia_accounts['Status'] == 'active')]
-socialmedia_accounts = socialmedia_accounts.rename(columns={'Excluding UK': 'Channel Group'})
-
-
-### RUN TESTS
-test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_1_0", f"{platformID}_1_1", f"{platformID}_1_2"], 
-                                 test_step="lookup files - ensuring country codes is correct")
-
-test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_1_3", f"{platformID}_1_4", f"{platformID}_1_5"], 
-                                 test_step = "lookup files - ensuring week tester is correct")
-
-test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_1_6", f"{platformID}_1_7", f"{platformID}_1_8"], 
-                                 test_step = "lookup files - ensuring social media accounts is correct")
-'''
-
-
 # # ingest data
 
 # In[4]:
@@ -107,12 +72,12 @@ headers_bau = {
 
 
 
-# In[5]:
+# In[12]:
 
 
 # function to get insights (post level) from user profile
 def get_post_level_insights(start_date, end_date, profile_id, headers):
-
+    user_limit_exceeded = False
     total_posts = [] # create empty list to contain the posts
     after_param = None # after parameter for going to the next page (Pagination)
 
@@ -140,8 +105,11 @@ def get_post_level_insights(start_date, end_date, profile_id, headers):
     if response.status_code != 200:
         print(f"❌ API request failed with status code {response.status_code} for profile {profile_id}, {start_date}")
         print(response.text)
-        return pd.DataFrame()
-    
+        return pd.DataFrame(), user_limit_exceeded
+    if "User limit exceeded" in response.text:
+        user_limit_exceeded = True
+        return pd.DataFrame(), user_limit_exceeded
+        
     try: # check if response can be turned to json format
         data = response.json()
     except json.JSONDecodeError:
@@ -193,49 +161,45 @@ def get_post_level_insights(start_date, end_date, profile_id, headers):
     df = pd.DataFrame(total_posts)
     if len(df) == 0:
         print(f"empty dataset! response status text: {response.text}")
-    return df
+    return df, user_limit_exceeded
 
 
-# In[6]:
+# In[13]:
 
 
 # Directory to store weekly data
 storage_dir = f"../data/raw/{platformID}/post_level/"
 os.makedirs(storage_dir, exist_ok=True)
 
-MAX_CALLS = 500
-PERIOD = 3600  # seconds (1 hour)
-
-start_time = time.time()
-request_count = 0
+user_limit_exceeded = False
 
 # Sort weeks from newest to oldest
-for week in week_tester['w/c'].sort_values(ascending=False):
+for week in tqdm(week_tester['w/c'].sort_values(ascending=False)):
     print(f"processing {week}")
-    for profile_id in tqdm(socialmedia_accounts['Channel ID'].tolist()):
-        # Check if we hit the limit
-        if request_count >= MAX_CALLS:
-            elapsed = time.time() - start_time
-            if elapsed < PERIOD:
-                wait = PERIOD - elapsed
-                print(f"⏳ Hit {MAX_CALLS} requests. Waiting {wait:.1f}s until hour resets...")
-                time.sleep(wait)
-            # Reset for next hour
-            start_time = time.time()
-            request_count = 0
+    for profile_id in socialmedia_accounts['Channel ID'].tolist():
+        if user_limit_exceeded:
+            print("⛔ Aborted due to user limit exceeded.")
+            break
 
         if week > datetime.now():
             continue
         end_date = week + pd.DateOffset(days=(6 - week.weekday()))
         week_str = week.strftime("%Y-%m-%d")
         filename = f"{gam_info['file_timeinfo']}_{platformID}_{profile_id}_{week_str}.csv"
+        filepath = os.path.join(storage_dir, filename)  # <-- check in storage_dir
 
-        if os.path.exists(filename):
+        if os.path.exists(filepath):
+            print('data already retrieved for week / account combination - skipping query')
             continue
         else:
             print(f"🔄 Fetching data for {profile_id} on week {week_str}...")
-            df = get_post_level_insights(week_str, end_date.strftime("%Y-%m-%d"), 
+            df, user_limit_exceeded = get_post_level_insights(week_str, end_date.strftime("%Y-%m-%d"), 
                                          profile_id, headers_bau)
+
+            if user_limit_exceeded:
+                print("⛔ Aborted due to user limit exceeded.")
+                break
+
             cols_that_must_not_be_empty = ['author', 'insights_viewers_by_country',
                                            'insights_avg_time_watched', 'duration', 
                                            'insights_reach', 'insights_completion_rate']    
@@ -255,13 +219,10 @@ for week in week_tester['w/c'].sort_values(ascending=False):
                 df["profile_id"] = profile_id
                 df["w/c"] = week
         
-            df.to_csv(f"{storage_dir}/{filename}", index=False)
-            print(f"✅ Saved to {filename}")
-            
-
-
-# In[ ]:
-
-
-
+            df.to_csv(filepath, index=False)
+            print(f"✅ Saved to {filepath}")
+        
+    if user_limit_exceeded:
+            print("⛔ Aborted outer loop due to user limit exceeded.")
+            break  # break outer loop
 

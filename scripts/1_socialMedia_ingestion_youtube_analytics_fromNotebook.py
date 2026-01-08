@@ -285,7 +285,7 @@ test_functions.test_filter_elements_returned(youtube_uv,
                                              test_step)
 # test weeks 
 test_functions.test_weeks_presence_per_account('w/c', 
-                                               'Channel ID', 
+                                               ['Channel ID'], 
                                                youtube_uv, 
                                                week_tester, 
                                                socialmedia_accounts,

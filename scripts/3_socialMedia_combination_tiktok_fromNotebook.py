@@ -193,7 +193,7 @@ test_functions.test_filter_elements_returned(post_level_df,
 
 # missing weeks per page_id
 test_functions.test_weeks_presence_per_account(key='w/c',
-                                               channel_id_col='Channel ID',
+                                               channel_id_col=['Channel ID'],
                                                main_data=post_level_df,
                                                week_lookup=week_tester[['w/c']],
                                                channel_lookup=socialmedia_accounts[['Channel ID', 'Start', 'End']],

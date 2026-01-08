@@ -34,9 +34,9 @@ groups = {
         "4_socialMedia_processing_youtube_fromNotebook.py",
     ],
     "tiktok": [
-        #"1_socialMedia_ingestion_tiktok_fromNotebook.py",
-        #"3_socialMedia_combination_tiktok_fromNotebook.py",
-        #"4_socialMedia_processing_tiktok_fromNotebook.py",
+        "1_socialMedia_ingestion_tiktok_fromNotebook.py",
+        "3_socialMedia_combination_tiktok_fromNotebook.py",
+        "4_socialMedia_processing_tiktok_fromNotebook.py",
     ],
     "site": [
         "1_site_ingestion_fromNotebook.py",

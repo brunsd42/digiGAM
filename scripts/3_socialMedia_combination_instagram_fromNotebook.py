@@ -93,6 +93,12 @@ engagements.sort_values(by='w/c')['w/c'].unique()
 # In[6]:
 
 
+engagements['w/c'].value_counts()
+
+
+# In[7]:
+
+
 country = pd.read_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_{platformID}_REDSHIFT_geog.csv",
                      keep_default_na=False)
 country['w/c'] = pd.to_datetime(country['w/c'])
@@ -101,7 +107,13 @@ country['Channel ID'] = country['Channel ID'].dropna()
 country.sample()
 
 
-# In[7]:
+# In[8]:
+
+
+country['w/c'].value_counts()
+
+
+# In[9]:
 
 
 country_annual_avg = calculate_rolling_avg_country_split(country, 'country_%',
@@ -110,7 +122,7 @@ country_annual_avg = calculate_rolling_avg_country_split(country, 'country_%',
 
 # # combine 
 
-# In[8]:
+# In[10]:
 
 
 combined = engagements.merge(country, on=["Channel ID", "w/c"], how='left', indicator=True)
@@ -142,7 +154,7 @@ cols = ['Channel ID', 'Channel Name',
 temp = pd.concat([combined_inner, left_matched])[cols]
 
 
-# In[9]:
+# In[11]:
 
 
 cols = ['Channel ID', 'Channel Name', 
@@ -151,7 +163,7 @@ engagement_country = pd.concat([combined_inner, temp])[cols].rename(columns={'IG
 
 
 
-# In[10]:
+# In[12]:
 
 
 to_clean_country = country_codes[['PlaceID', 'YT-_FBE_codes', gam_info['population_column']]]
@@ -167,7 +179,7 @@ final_ig_data['uv_by_country'] = final_ig_data['engaged_reach'] * final_ig_data[
 
 # # store 
 
-# In[11]:
+# In[14]:
 
 
 print(final_ig_data.shape)
