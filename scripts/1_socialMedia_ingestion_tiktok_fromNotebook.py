@@ -72,7 +72,7 @@ headers_bau = {
 
 
 
-# In[12]:
+# In[5]:
 
 
 # function to get insights (post level) from user profile
@@ -164,7 +164,7 @@ def get_post_level_insights(start_date, end_date, profile_id, headers):
     return df, user_limit_exceeded
 
 
-# In[13]:
+# In[6]:
 
 
 # Directory to store weekly data
@@ -177,6 +177,8 @@ user_limit_exceeded = False
 for week in tqdm(week_tester['w/c'].sort_values(ascending=False)):
     print(f"processing {week}")
     for profile_id in socialmedia_accounts['Channel ID'].tolist():
+        profile_id = profile_id[3:]
+
         if user_limit_exceeded:
             print("⛔ Aborted due to user limit exceeded.")
             break
@@ -216,7 +218,7 @@ for week in tqdm(week_tester['w/c'].sort_values(ascending=False)):
                 
             else:
                 df["platformID"] = platformID
-                df["profile_id"] = profile_id
+                df["profile_id"] = platformID+profile_id
                 df["w/c"] = week
         
             df.to_csv(filepath, index=False)
@@ -225,4 +227,10 @@ for week in tqdm(week_tester['w/c'].sort_values(ascending=False)):
     if user_limit_exceeded:
             print("⛔ Aborted outer loop due to user limit exceeded.")
             break  # break outer loop
+
+
+# In[ ]:
+
+
+
 

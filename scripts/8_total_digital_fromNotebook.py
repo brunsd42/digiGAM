@@ -911,7 +911,8 @@ test_functions.test_weeks_presence_per_account(key='w/c',
 # In[50]:
 
 
-digital_df.tail()
+digital_df[(digital_df['w/c'] == '2025-12-29') & 
+    (digital_df['ServiceID'].isin( 'ALL'))].head(50)
 
 
 # In[49]:
