@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from tqdm import tqdm
 import re
-from openpyxl import load_workbook
+#from openpyxl import load_workbook
 from openpyxl import Workbook
 
 import matplotlib.pyplot as plt
@@ -49,7 +49,7 @@ def test_filter_elements_returned(df, filter_elements, column_name, test_number,
     
     # Print the results
     if not issues_df.empty:
-        print(f"❌ Test {test_number} failed: not all elements from lookup were retrieved in dataset - decide if they are really missing or if these accounts are inactive ")
+        print(f"❌ Test {test_number} failed: not all elements from lookup were retrieved in dataset - decide if they are really missing or if these are inactive ")
     else:
         print(f"✅ Test {test_number} passed: everything found!")
     
@@ -307,14 +307,14 @@ def test_missing(df, columns, test_number, test_step='', name='lookup'):
     issues_df = pd.DataFrame()
 
     if missing_counts.any():
-        print(f"❌ Test {test_number} failed: Missing values detected in {name}.")
+        print(f"❌ Test {test_number} failed: empty values detected in {name}.")
         # Prepare details for logbook
         missing_detail = {col: int(count) for col, count in missing_counts.items() if count > 0}
-        issues_df = pd.DataFrame({'Issue': [f"Missing values: {missing_detail}"]})
+        issues_df = pd.DataFrame({'Issue': [f"empty values: {missing_detail}"]})
     else:
-        print(f"✅ Test {test_number} passed: No missing values in {name}.")
+        print(f"✅ Test {test_number} passed: No empty values in {name}.")
 
-    update_logbook(test_number, issues_df, test=f"Testing missing values in {name}", test_step=test_step)
+    update_logbook(test_number, issues_df, test=f"Testing empty values in {name}", test_step=test_step)
     
 
 #############################################################################################################

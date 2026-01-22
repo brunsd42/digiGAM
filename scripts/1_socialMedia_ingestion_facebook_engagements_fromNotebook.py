@@ -98,7 +98,7 @@ facebook_engagements_raw = facebook_engagements_raw.rename(columns={'page_id': '
 print(facebook_engagements_raw.shape)
 
 
-# In[7]:
+# In[6]:
 
 
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
@@ -134,7 +134,7 @@ test_functions.test_duplicates(facebook_engagements_raw,
 
 # ## processing engagements
 
-# In[8]:
+# In[7]:
 
 
 # needs to be right because we want to make sure that all the accounts in lookup are there 
@@ -159,13 +159,13 @@ mask = (
 facebook_engagements = facebook_engagements[mask]
 
 
-# In[9]:
+# In[8]:
 
 
 facebook_engagements[facebook_engagements['Channel ID'] == 'FBE102775241582303'].sort_values('w/c')
 
 
-# In[10]:
+# In[9]:
 
 
 file_path = f"../data/processed/{platformID}"

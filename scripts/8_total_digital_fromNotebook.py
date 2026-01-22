@@ -908,14 +908,21 @@ test_functions.test_weeks_presence_per_account(key='w/c',
                                                test_step="Check all weeks present for each account")
 
 
-# In[50]:
+# In[48]:
 
 
-digital_df[(digital_df['w/c'] == '2025-12-29') & 
-    (digital_df['ServiceID'].isin( 'ALL'))].head(50)
+week_tester['w/c'].max()
 
 
 # In[49]:
+
+
+digital_df[(digital_df['ServiceID'] == 'SPA') & 
+            (digital_df['PlatformID'] == 'TTK') & 
+            (digital_df['w/c'] == '2026-01-05')]
+
+
+# In[50]:
 
 
 digital_df.to_csv(f"{output_dir}/{gam_info['file_timeinfo']}_digi_gam_weekly.csv", 
@@ -944,22 +951,22 @@ else:
     print("Warning: Test logbook not found!")
 
 
-# In[ ]:
+# In[51]:
 
 
 # add a test - for all platform services and weeks is there a gap? 
 
 
-# In[ ]:
+# In[54]:
 
 
-digital_df[(digital_df['w/c'] == '2025-12-08') & (digital_df['PlatformID'] == 'FBE')]['ServiceID'].unique()
+digital_df[digital_df['w/c'] == '2026-01-12']['PlatformID'].unique()
 
 
-# In[ ]:
+# In[55]:
 
 
-digital_df['PlatformID'].unique()
+digital_df[digital_df['w/c'] == '2026-01-12']['ServiceID'].unique()
 
 
 # In[ ]:

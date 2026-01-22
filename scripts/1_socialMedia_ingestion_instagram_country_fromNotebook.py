@@ -39,7 +39,7 @@ sys.path.insert(0, str(helper_path))
 # Now import your modules 
 from config import gam_info
 
-from functions import lookup_loader, execute_sql_query, compare_or_update_reference
+from functions import lookup_loader, execute_sql_query, compare_or_update_reference, fix_country_one_percent_prev_week
 import test_functions 
 
 
@@ -56,31 +56,7 @@ country_codes = lookup['country_codes']
 # In[5]:
 
 
-'''# country
-country_cols = ['YT-_FBE_codes', 'ins_country_name', 'PlaceID',]
-country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='CountryID',
-                             keep_default_na=False)[country_cols]
-
-# week 
-week_cols = ['w/c']
-week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='GAM Period')
-week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-
-# social media accounts 
-channel_cols=['Channel ID']
-socialmedia_accounts = pd.read_excel(f"../helper/ins_account_lookup.xlsx")
-channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
-
-### RUN TESTS
-test_functions.test_lookup_files(country_codes, country_cols, [f"{platformID}_country_0", f"{platformID}_country_1", f"{platformID}_country_2"], 
-                                 test_step="lookup files - ensuring country codes is correct")
-
-test_functions.test_lookup_files(week_tester, ['w/c'], [f"{platformID}_country_3", f"{platformID}_country_4", f"{platformID}_country_5"], 
-                                 test_step = "lookup files - ensuring week tester is correct")
-
-test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], [f"{platformID}_country_6", f"{platformID}_country_7", f"{platformID}_country_8"], 
-                                 test_step = "lookup files - ensuring social media accounts is correct")
-'''
+country_codes[country_codes['ins_country_name'] == 'Iran']
 
 
 # # ingestion
@@ -137,7 +113,7 @@ ig_userCountry_raw = ig_userCountry_raw.merge(country_codes[['YT-_FBE_codes', 'i
 ig_userCountry_raw.loc[ig_userCountry_raw['YT-_FBE_codes'] == '', 'YT-_FBE_codes'] = ig_userCountry_raw.loc[ig_userCountry_raw['YT-_FBE_codes'] == '', 
     'YT-_FBE_codes_name_based']
 
-ig_userCountry_raw = ig_userCountry_raw.drop(columns=['YT-_FBE_codes_name_based'])
+ig_userCountry_raw = ig_userCountry_raw.drop(columns=['YT-_FBE_codes_name_based']).drop_duplicates()
 
 ### RUN TESTS
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
@@ -171,7 +147,7 @@ test_functions.test_duplicates(ig_userCountry_raw, ['Channel ID', 'w/c', 'YT-_FB
 
 
 
-# In[ ]:
+# In[7]:
 
 
 test_functions.test_inner_join(ig_userCountry_raw, socialmedia_accounts, 
@@ -183,20 +159,21 @@ ig_userCountry = ig_userCountry_raw.merge(socialmedia_accounts[['Channel ID', 'S
                                                       on='Channel ID', how='left')
 
 
-# In[ ]:
+# In[8]:
 
 
 test_functions.test_inner_join(ig_userCountry, 
                                country_codes, 
                                ['YT-_FBE_codes'], 
                                f"{platformID}_1c_14",
-                               test_step='calculating country %')
+                               test_step='calculating country %', 
+                                focus='left')
 ig_userCountry = ig_userCountry.merge(country_codes[['YT-_FBE_codes', 'PlaceID']], 
                                           on='YT-_FBE_codes', 
                                           how='left').drop(columns=['YT-_FBE_codes'])
 
 
-# In[ ]:
+# In[9]:
 
 
 # currently sql table has duplicates
@@ -207,7 +184,7 @@ test_functions.test_duplicates(ig_userCountry, ['Channel ID', 'w/c', 'PlaceID'],
                                test_step='dropped duplicates past processing')
 
 
-# In[ ]:
+# In[10]:
 
 
 grouped_df = ig_userCountry.groupby(['Channel ID', 'Channel Name', 
@@ -236,7 +213,96 @@ test_functions.test_percentage(ig_country_df,
                                test_step='summing country % per week & account')
 
 
-# In[ ]:
+# In[11]:
+
+
+ig_country_df.shape
+
+
+# In[12]:
+
+
+'''
+### DANGER! FIXING IRAN REACH AT 1% DUE TO CURRENT SHUTDOWN 
+
+def fix_country_one_percent(df, country_code, week_list):
+    print(f"Fixing Iran reach at 1% due to shutdown for weeks: {week_list}")
+    
+    df = df.copy()
+
+    # filter affected weeks ONLY
+    affected = df[df['w/c'].isin(set(week_list))]
+    print("Affected rows:", affected.shape)
+
+    # loop only over affected weeks
+    for (channel, wc), group in affected.groupby(['Channel ID', 'w/c']):
+        
+        # Iran row
+        old_country_pct = group.loc[group['PlaceID'] == country_code, 'country_%']
+        if old_country_pct.empty:
+            continue
+
+        old_country_pct = float(old_country_pct.iloc[0])
+        new_country_pct = 0.01
+
+        if abs(old_country_pct - new_country_pct) < 1e-9:
+            continue
+
+        # scale all OTHER countries proportionally
+        scale_factor = (1 - new_country_pct) / (1 - old_country_pct)
+
+        group_mask        = (df['Channel ID'] == channel) & (df['w/c'] == wc)
+        country_mask      = group_mask & (df['PlaceID'] == country_code)
+        non_country_mask  = group_mask & (df['PlaceID'] != country_code)
+
+        df.loc[non_country_mask, 'country_%'] *= scale_factor
+        df.loc[country_mask, 'country_%'] = new_country_pct
+
+    return df
+
+
+# Iran = PlaceID "IRN"
+IRAN_CODE = "IRN"
+
+ig_country_df = fix_country_one_percent(
+    ig_country_df,
+    IRAN_CODE,
+    ["2026-01-12"]
+)
+'''
+
+
+# Iran = PlaceID "IRN"
+IRAN_CODE = "IRN"
+
+ig_country_df = fix_country_one_percent_prev_week(
+    ig_country_df,
+    IRAN_CODE,
+    ["2026-01-12"]
+)
+
+
+# In[13]:
+
+
+#sanity checks 
+# 1
+#display(ig_country_df[(ig_country_df['w/c'] == '2026-01-12') & (ig_country_df['PlaceID'] == 'IRN')].head())
+# 2
+#display(ig_country_df[(ig_country_df['w/c'] == '2026-01-12') & (ig_country_df['Channel ID'] == 'INS17841402172935746')].sort_values('PlaceID'))
+# 3 
+print(ig_country_df[(ig_country_df['w/c'] == '2026-01-12') & (ig_country_df['Channel ID'] == 'INS17841402172935746')].sort_values('PlaceID')['country_%'].sum())
+
+#sanity checks - previous weeks are not affected
+# 4
+#display(ig_country_df[(ig_country_df['w/c'] == '2026-01-05') & (ig_country_df['PlaceID'] == 'IRN')].head())
+# 5
+#display(ig_country_df[(ig_country_df['w/c'] == '2026-01-05') & (ig_country_df['Channel ID'] == 'INS17841402172935746')].sort_values('PlaceID'))
+# 6 
+print(ig_country_df[(ig_country_df['w/c'] == '2026-01-05') & (ig_country_df['Channel ID'] == 'INS17841402172935746')].sort_values('PlaceID')['country_%'].sum())
+
+
+# In[14]:
 
 
 file_path = f"../data/processed/{platformID}"
@@ -250,4 +316,10 @@ compare_or_update_reference(ig_country_df[cols],
                             f"../test/refactoring/{platformID}_country_expected.pkl", 
                             cols, update=False)
 '''
+
+
+# In[ ]:
+
+
+
 

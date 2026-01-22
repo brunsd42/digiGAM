@@ -180,6 +180,68 @@ def lookup_loader(gam_info, platformID, script,
 
 ################################ single platform calculations
 
+def fix_country_one_percent_prev_week(df, country_code, week_list):
+    print(f"Fixing Iran reach to 1% of previous week's value for weeks: {week_list}")
+    
+    df = df.copy()
+    df = df.sort_values(["Channel ID", "w/c"])   # ensure time order if needed
+
+    # Filter affected weeks only
+    affected = df[df['w/c'].isin(set(week_list))]
+    print("Affected rows:", affected.shape)
+
+    for (channel, wc), group in affected.groupby(['Channel ID', 'w/c']):
+
+        # --- Find previous week for THIS channel ---
+        all_weeks = (
+            df.loc[df['Channel ID'] == channel, "w/c"]
+            .drop_duplicates()
+            .sort_values()
+            .tolist()
+        )
+
+        idx = all_weeks.index(wc)
+        if idx == 0:
+            # No previous week → skip (or set fallback, your choice)
+            continue
+
+        prev_week = all_weeks[idx - 1]
+
+        # --- Get Iran % from previous week ---
+        prev_week_iran = df[
+            (df['Channel ID'] == channel) &
+            (df['w/c'] == prev_week) &
+            (df['PlaceID'] == country_code)
+        ]["country_%"]
+
+        if prev_week_iran.empty:
+            continue
+
+        prev_val = float(prev_week_iran.iloc[0])
+        new_country_pct = prev_val * 0.01  # <-- THE CHANGE
+
+        # --- Get ORIGINAL Iran % for this affected week ---
+        old_country_pct_series = group.loc[group['PlaceID'] == country_code, 'country_%']
+        if old_country_pct_series.empty:
+            continue
+
+        old_country_pct = float(old_country_pct_series.iloc[0])
+
+        if abs(old_country_pct - new_country_pct) < 1e-12:
+            continue
+
+        # --- Scale other countries proportionally ---
+        scale_factor = (1 - new_country_pct) / max(1 - old_country_pct, 1e-12)
+
+        group_mask = (df['Channel ID'] == channel) & (df['w/c'] == wc)
+        iran_mask = group_mask & (df['PlaceID'] == country_code)
+        other_mask = group_mask & (~iran_mask)
+
+        df.loc[other_mask, "country_%"] *= scale_factor
+        df.loc[iran_mask, "country_%"] = new_country_pct
+
+    return df
+
 def calculate_rolling_avg_country_split(df, metric_col='rescaled_percentage', min_week=None, max_week=None):
     """
     For each channel and place, generate a full Monday calendar from min_week to max_week (inclusive),

@@ -34,7 +34,7 @@ except NameError:
 sys.path.insert(0, str(helper_path))
 
 # Now import your modules
-from functions import lookup_loader, execute_sql_query, calculate_rolling_avg_country_split, apply_first_split_backfill, compare_or_update_reference
+from functions import lookup_loader, execute_sql_query, calculate_rolling_avg_country_split, apply_first_split_backfill, compare_or_update_reference, fix_country_one_percent_prev_week
 import test_functions
 
 from config import gam_info
@@ -78,6 +78,8 @@ except:
     print("no redshift connection using last time queried")
 
 facebook_country_raw = pd.read_csv(file, keep_default_na=False, dtype={"page_id": "string"}).drop_duplicates()
+if 'FBE' not in facebook_country_raw['page_id']:
+    facebook_country_raw['page_id'] = platformID+facebook_country_raw['page_id']
 facebook_country_raw['week_commencing'] = pd.to_datetime(facebook_country_raw['week_commencing'])
 facebook_country_raw = facebook_country_raw.rename(columns={'page_id': 'Channel ID',
                                                             'page_name': 'Channel Name',
@@ -85,8 +87,7 @@ facebook_country_raw = facebook_country_raw.rename(columns={'page_id': 'Channel 
                                                             'fb_metric_breakdown': 'YT-_FBE_codes'})
 
 
-
-# In[7]:
+# In[6]:
 
 
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
@@ -121,7 +122,7 @@ test_functions.test_duplicates(facebook_country_raw, ['Channel ID', 'w/c', 'YT-_
                                test_step='Check no duplicates from redshift returned')
 
 
-# In[8]:
+# In[7]:
 
 
 # filter to relevant channel ids
@@ -143,7 +144,7 @@ facebook_country = facebook_country.merge(country_codes[['YT-_FBE_codes', 'Place
                                           how='left').drop(columns=['YT-_FBE_codes'])
 
 
-# In[9]:
+# In[8]:
 
 
 # Group by specified columns and sum the fb_metric_value
@@ -166,7 +167,7 @@ test_functions.test_percentage(facebook_country,
                                test_step='summing country % per week & account')
 
 
-# In[10]:
+# In[9]:
 
 
 # calculate rolling average for missing weeks ?
@@ -180,7 +181,7 @@ avg_backfill_country_df = apply_first_split_backfill(avg_country_df,
                                                          )
 
 
-# In[11]:
+# In[10]:
 
 
 # Canonical channel list and canonical week list
@@ -239,7 +240,40 @@ result_df = result_df[cols].drop_duplicates().dropna(subset='country_%')
 # - Filled `PlaceID` / `country_%` from per-channel averages where originals were NaN
 
 
+# In[11]:
+
+
+# Iran = PlaceID "IRN"
+IRAN_CODE = "IRN"
+
+result_df = fix_country_one_percent_prev_week(
+    result_df,
+    IRAN_CODE,
+    ["2026-01-12"]
+)
+
+
 # In[13]:
+
+
+#sanity checks 
+# 1
+#display(result_df[(result_df['w/c'] == '2026-01-12') & (result_df['PlaceID'] == 'IRN')].head())
+# 2
+#display(result_df[(result_df['w/c'] == '2026-01-12') & (result_df['Channel ID'] == 'FBE102186576502930')].sort_values('PlaceID'))
+# 3 
+print(result_df[(result_df['w/c'] == '2026-01-12') & (result_df['Channel ID'] == 'FBE102186576502930')].sort_values('PlaceID')['country_%'].sum())
+
+#sanity checks - previous weeks are not affected
+# 4
+#display(result_df[(result_df['w/c'] == '2026-01-05') & (result_df['PlaceID'] == 'IRN')].head())
+# 5
+#display(result_df[(result_df['w/c'] == '2026-01-05') & (result_df['Channel ID'] == 'FBE102186576502930')].sort_values('PlaceID'))
+# 6 
+print(result_df[(result_df['w/c'] == '2026-01-05') & (result_df['Channel ID'] == 'FBE102186576502930')].sort_values('PlaceID')['country_%'].sum())
+
+
+# In[12]:
 
 
 # missing weeks per page_id
@@ -264,7 +298,7 @@ test_functions.test_duplicates(result_df,
                                test_step='After rolling average: Check no duplicates from redshift returned')
 
 
-# In[14]:
+# In[13]:
 
 
 file_path = f"../data/processed/{platformID}"

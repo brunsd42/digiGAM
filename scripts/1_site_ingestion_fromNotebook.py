@@ -201,13 +201,13 @@ if 'API' not in combined_df.columns:
 combined_df['w/c'] = pd.to_datetime(combined_df['w/c'] )
 
 
-# In[14]:
+# In[10]:
 
 
 week_tester.dtypes
 
 
-# In[16]:
+# In[11]:
 
 
 # test all reports are there 

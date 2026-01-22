@@ -265,23 +265,10 @@ service_hierarchy_issues = test_functions.test_hierarchy_reach(f"{platformID}_4_
                                                                 round_metric=True)
 
 
-# In[11]:
+# In[14]:
 
 
-combined_weekly.head()
-
-
-# In[12]:
-
-
-global_reach = combined_weekly.groupby(['ServiceID', 'w/c'])['Reach'].sum().reset_index()
-
-
-# In[13]:
-
-
-global_reach[#(combined_weekly['ServiceID'] == ) & 
-    (global_reach['w/c'] == '2025-10-27') ].sort_values('Reach', ascending=False) # should be AX2=mio
+combined_weekly['w/c'].max()
 
 
 # In[ ]:

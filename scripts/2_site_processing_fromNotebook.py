@@ -84,7 +84,7 @@ non_js_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_
 app_map = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='Site_App')
 
 
-# In[7]:
+# In[4]:
 
 
 full_df = pd.read_csv(f"../data/raw/site/{gam_info['file_timeinfo']}_rawDataFromPiano.csv", dtype={'Report No.': str})
@@ -179,19 +179,19 @@ df.drop(columns=['ServiceID_y', '_merge'], inplace=True)
 print(f"5: {df.shape}")
 
 
-# In[14]:
+# In[6]:
 
 
 service_codes['site_level2'].unique()
 
 
-# In[11]:
+# In[7]:
 
 
 df[df['site_level2'] == 'dari']
 
 
-# In[ ]:
+# In[8]:
 
 
 ################ ADD SERVICE BASED ON app_name
@@ -240,7 +240,7 @@ test_functions.test_join_rowCount(df, country_codes[cols], ['geo_country'],
 df = df.merge(country_codes[cols], on='geo_country', how='left')
 
 
-# In[7]:
+# In[9]:
 
 
 ################ ADD PLATFORM TO STUDIOS
@@ -249,7 +249,7 @@ df = df.merge(country_codes[cols], on='geo_country', how='left')
 df.loc[df['PlatformID'].isna() & (df['ServiceID'] == 'WOR'), 'PlatformID'] = 'WDI'
 
 
-# In[8]:
+# In[10]:
 
 
 # Specify the dtype option to avoid DtypeWarning for columns with mixed types
@@ -294,7 +294,7 @@ msno.matrix(df)
 df.to_csv(f"../data/processed/{gam_info['file_timeinfo']}_DataFromPiano_noSyndication.csv", index=None)
 
 
-# In[9]:
+# In[11]:
 
 
 # GLOBAL NEWS PARTNERS 
@@ -348,7 +348,7 @@ except:
 df_gnl = pd.concat([df, gnl_weekly_win, gnl_weekly_www])
 
 
-# In[10]:
+# In[12]:
 
 
 # LEARNING ENGLISH PARTNERS
@@ -389,7 +389,7 @@ except:
 df_gnl_le = pd.concat([df_gnl, le_partner])
 
 
-# In[11]:
+# In[13]:
 
 
 cols = ['Space', 'YearGAE', 'w/c', 'm_unique_visitors', 'device_type', 'ServiceID', 'PlatformID', 'PlaceID']

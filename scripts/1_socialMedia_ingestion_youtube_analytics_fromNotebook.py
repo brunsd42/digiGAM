@@ -165,12 +165,12 @@ combined_df['week_ending'] = combined_df['w/c'] + pd.to_timedelta(6 - combined_d
 
 combined_df['Channel Group'] = combined_df['Channel Group'].str.replace('.zip', '')
 combined_df = combined_df.rename(columns={'Channel': 'Channel ID'})
-combined_df['Channel ID'] = platformID+combined_df['Channel ID'] 
 
 # TODO: confirm what to do with the total (so far it's excluded at the inner join with social media accounts)
 combined_df = combined_df.loc[combined_df['Channel ID'] != 'Total']
+combined_df['Channel ID'] = platformID+combined_df['Channel ID'] 
 
-# confirm dtypes 
+# confirm dty pes 
 combined_df.loc[:, 'Unique viewers'] = pd.to_numeric(combined_df['Unique viewers'], errors='raise').astype('Int64')
 combined_df.loc[:, 'Views'] = pd.to_numeric(combined_df['Views'].fillna(0), errors='raise').astype('Int64')
 combined_df.loc[:, 'Watch time (hours)'] = pd.to_numeric(combined_df['Watch time (hours)'], errors='raise')
@@ -364,8 +364,14 @@ except:
                          index=None)
 
 
+# In[13]:
+
+
+youtube_uv['w/c'].max()
+
+
 # In[ ]:
 
 
-
+# to do add testing and filter 
 

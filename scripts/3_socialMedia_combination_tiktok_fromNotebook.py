@@ -78,7 +78,7 @@ socialmedia_accounts.sample()
 
 # # read in 
 
-# In[24]:
+# In[5]:
 
 
 cols_that_must_not_be_empty = ['author', 'insights_viewers_by_country',
@@ -131,7 +131,7 @@ else:
     print("🚫 No valid data found to combine.")
 
 
-# In[25]:
+# In[6]:
 
 
 post_level_df = post_level_df.rename(columns={'platformID': 'PlatformID'})
@@ -150,7 +150,7 @@ print(week_counts)
 pivot_df = post_level_df.pivot_table(columns='profile_id', index='w/c', aggfunc='size')
 
 
-# In[26]:
+# In[7]:
 
 
 def extract_author_info(row):
@@ -177,7 +177,7 @@ def extract_author_info(row):
 post_level_df[["Channel ID", "Channel Name", "Channel URL"]] = post_level_df['author'].apply(extract_author_info)
 
 
-# In[27]:
+# In[8]:
 
 
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
@@ -216,7 +216,7 @@ test_functions.test_duplicates(post_level_df, ['Channel ID', 'w/c', 'link'],
 
 # # Views
 
-# In[28]:
+# In[9]:
 
 
 minnie_cols_used = {'Date': 'w/c', #minnie has a day by day breakdown and then calculates the average
@@ -248,7 +248,7 @@ views_df['content_id'] = views_df['link'].str.split('/').str[-1].str.split('?').
 views_df.head()
 
 
-# In[29]:
+# In[10]:
 
 
 # optional: test video length is all in seconds
@@ -261,7 +261,7 @@ cols_fill_nan = ['insights_avg_time_watched', 'duration', 'insights_reach',
 views_df[cols_fill_nan] = views_df[cols_fill_nan].fillna(0)  # or any other value you'd like
 
 
-# In[30]:
+# In[11]:
 
 
 # Define x and y values for each row
@@ -310,7 +310,7 @@ views_df['final_video_views'] = np.select(conditions, choices,
                                             default=views_df['30sec_video_views'])
 
 
-# In[31]:
+# In[12]:
 
 
 views_df_full = views_df.merge(socialmedia_accounts[['Channel ID', 'ServiceID', 'Linked FB Account']],
@@ -322,7 +322,7 @@ test_functions.test_inner_join(views_df, socialmedia_accounts[['Channel ID', 'Se
                                focus='left')
 
 
-# In[32]:
+# In[13]:
 
 
 file_path = f"../data/processed/{platformID}"
@@ -337,7 +337,7 @@ views_df_full.to_csv(f"{file_path}/{gam_info['file_timeinfo']}_{platformID}_view
                        index=None)
 
 
-# In[33]:
+# In[14]:
 
 
 # YT views per viewer is missing for media action 
@@ -348,7 +348,7 @@ yt_views_per_viewer = gnl_expander(yt_views_per_viewer)
 yt_views_per_viewer.sample()
 
 
-# In[34]:
+# In[15]:
 
 
 views_df_full['w/c'] = pd.to_datetime(views_df_full['w/c'])
@@ -373,13 +373,13 @@ views_scaled.columns
 
 # # Country 
 
-# In[35]:
+# In[16]:
 
 
 country_df = post_level_df.copy()
 
 
-# In[36]:
+# In[17]:
 
 
 # Step 1: Parse the stringified list of country-percentage dictionaries
@@ -404,7 +404,7 @@ exploded_df['country'] = exploded_df['country'].replace('Others', 'ZZ')
 exploded_df['country'] = exploded_df['country'].fillna('ZZ')
 
 
-# In[37]:
+# In[18]:
 
 
 exploded_df = exploded_df.rename(columns={'country': 'TikTok Codes'})
@@ -433,7 +433,7 @@ ttk_country.to_csv(f"../data/processed/{platformID}/{gam_info['file_timeinfo']}_
                   index=None, na_rep='')
 
 
-# In[38]:
+# In[19]:
 
 
 # Weekly mean per channel/place to get to a rolling channel / coutnry split average
@@ -455,7 +455,7 @@ avg_country_df = calculate_rolling_avg_country_split(ttk_country_avg_channel, 'r
 # As the average is larger than 1 the country view is rebased 
 # 
 
-# In[39]:
+# In[20]:
 
 
 # 1. Convert week column to datetime
@@ -525,7 +525,7 @@ combined_data = combined_data.merge(country_codes[['PlaceID', gam_info['populati
                                     on=['PlaceID'], how='left')
 
 
-# In[40]:
+# In[21]:
 
 
 # 10. Apply Sainsbury formula for country-level views
@@ -556,7 +556,7 @@ dedupli_df = pd.concat(deduplicated_datasets)
         
 
 
-# In[41]:
+# In[22]:
 
 
 # 11. Aggregate to profile level (country-specific)

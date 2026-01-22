@@ -438,7 +438,7 @@ platform_hierarchy_issues = test_functions.test_hierarchy_reach(test_number='3_S
 # TODO share Platform hierarchy issues '''
 
 
-# In[19]:
+# In[18]:
 
 
 # FINALS
@@ -482,13 +482,13 @@ gam_df.to_excel(f"../data/singlePlatform/site/{gam_info['file_timeinfo']}_site_r
 
 # # analysis 
 
-# In[ ]:
+# In[19]:
 
 
 # TO DO create an analysis that compares WWW & (WIN + WDI)
 
 
-# In[ ]:
+# In[20]:
 
 
 #msno.matrix(df_grouped)
@@ -500,7 +500,7 @@ gam_df.to_excel(f"../data/singlePlatform/site/{gam_info['file_timeinfo']}_site_r
 #plt.show()
 
 
-# In[ ]:
+# In[21]:
 
 
 #pd.set_option('display.float_format', lambda x: '%.2f' % x)
@@ -508,7 +508,7 @@ gam_df.to_excel(f"../data/singlePlatform/site/{gam_info['file_timeinfo']}_site_r
 #df_grouped[~df_grouped['ServiceID'].isin(['GNL', 'WOR'])].sort_values('m_unique_visitors', ascending=False).head(50)
 
 
-# In[ ]:
+# In[22]:
 
 
 #df_grouped[(df_grouped['PlaceID'] == 'IND') & 
@@ -517,7 +517,7 @@ gam_df.to_excel(f"../data/singlePlatform/site/{gam_info['file_timeinfo']}_site_r
 #]
 
 
-# In[ ]:
+# In[23]:
 
 
 #msno.matrix(people_df)

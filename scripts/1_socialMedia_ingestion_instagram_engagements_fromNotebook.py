@@ -45,10 +45,10 @@ import test_functions
 
 
 lookup = lookup_loader(gam_info, platformID, '1e',
-                       with_country=True, country_col=['YT-_FBE_codes', 'ins_country_name',])
+                       with_country=False,)
 week_tester = lookup['week_tester']
 socialmedia_accounts = lookup['socialmedia_accounts']
-country_codes = lookup['country_codes']
+
 
 # Factors
 ins_factors = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name='INS_Factors', index_col='ServiceID')['Factor']
@@ -190,15 +190,9 @@ test_functions.test_outliers_vs_reference(ig_views_raw, reference_df,
 
 
 
-# In[7]:
-
-
-ig_views_raw[ig_views_raw['Channel ID'] == 'INS17841401898135827']
-
-
 # ## stale - temporary fix
 
-# In[15]:
+# In[7]:
 
 
 path = "../data/stale/IG Profile Engagement Metrics - Weekly GAM 2026.xlsx"
@@ -220,7 +214,7 @@ ig_views_raw = pd.concat([stale_engagements, ig_views_raw[ig_views_raw['w/c'] >=
                         ignore_index=True)
 
 
-# In[16]:
+# In[8]:
 
 
 # add data different to reference sheet
@@ -228,7 +222,7 @@ ig_views_raw = pd.concat([stale_engagements, ig_views_raw[ig_views_raw['w/c'] >=
 # missing week? replace with value from reference
 
 
-# In[17]:
+# In[9]:
 
 
 ig_views_slim = ig_views_raw.merge(socialmedia_accounts[['Channel ID', 'ServiceID']], 
@@ -243,11 +237,11 @@ test_functions.test_inner_join(ig_views_raw, socialmedia_accounts,
 plays_factor = pd.read_excel("../data/stale/Instagram - Views to Reels Plays.xlsx", 
                              dtype={'IG Page ID': 'str'})\
                     .rename(columns={'IG Page ID': 'Channel ID'})[['Channel ID', 'reels_replay_factor']]
-
+plays_factor['Channel ID'] = platformID+plays_factor['Channel ID']
 # TODO 12 fails even though 06 passed - so here is an error introduced - find it and remedy it!
 
 
-# In[18]:
+# In[10]:
 
 
 test_functions.test_inner_join(ig_views_slim, plays_factor,
@@ -298,22 +292,7 @@ ig_views.loc[mask_persian, 'engaged_reach'] = ((ig_views.loc[mask_persian, 'enga
 ig_views['engaged_reach'] = ig_views['engaged_reach'].clip(upper=ig_views['weekly_reach'])
 
 
-# In[19]:
-
-
-ig_views[(ig_views['ServiceID'] == 'PER') & 
-    (ig_views['w/c'] == '2025-05-05') 
-    #& (engagements['PlaceID'] == 'IRN')
-    ]#['uv_by_country'].sum()
-
-
-# In[20]:
-
-
-ig_views['w/c'].value_counts()
-
-
-# In[21]:
+# In[11]:
 
 
 file_path = f"../data/processed/{platformID}"

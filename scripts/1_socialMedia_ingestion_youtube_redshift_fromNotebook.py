@@ -162,7 +162,7 @@ test_functions.test_inner_join(yt_views_raw,
 
 
 
-# In[9]:
+# In[8]:
 
 
 # Group by the specified columns and sum the yt_metric_value
@@ -194,7 +194,7 @@ yt_country
 
 # # store
 
-# In[10]:
+# In[9]:
 
 
 file_path = f"../data/processed/{platformID}"
@@ -203,4 +203,16 @@ os.makedirs(file_path, exist_ok=True)
 cols = ['Channel ID', 'Channel Name', 'w/c', 'PlaceID', 'country_%']
 yt_country[cols].to_csv(f"{file_path}/{gam_info['file_timeinfo']}_REDSHIFT_COUNTRY.csv", 
                          index=None, na_rep='')
+
+
+# In[10]:
+
+
+yt_country['w/c'].max()
+
+
+# In[ ]:
+
+
+
 
