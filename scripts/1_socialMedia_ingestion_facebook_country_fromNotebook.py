@@ -48,6 +48,8 @@ lookup = lookup_loader(gam_info, platformID, '1c',
 week_tester = lookup['week_tester']
 socialmedia_accounts = lookup['socialmedia_accounts']
 country_codes = lookup['country_codes']
+socialmedia_accounts.head(10)
+
 
 
 # ## country
@@ -72,14 +74,18 @@ file = f"../data/raw/{platformID}/{gam_info['file_timeinfo']}_{platformID}_count
 
 try: 
     df = execute_sql_query(sql_query)
-    df['page_id'] = platformID+facebook_country_raw['page_id']
+    df['page_id'] = platformID+df['page_id']
     df.to_csv(file, index=False, na_rep='')
-except:
-    print("no redshift connection using last time queried")
+except Exception as e:
+    print("No Redshift connection or another error occurred. Using last time queried.")
+    print(f"Error: {e}")
 
 facebook_country_raw = pd.read_csv(file, keep_default_na=False, dtype={"page_id": "string"}).drop_duplicates()
-if 'FBE' not in facebook_country_raw['page_id']:
-    facebook_country_raw['page_id'] = platformID+facebook_country_raw['page_id']
+
+# if not facebook_country_raw['page_id'].astype(str).str.startswith('FBE') :
+#     facebook_country_raw['page_id'] = platformID+facebook_country_raw['page_id']
+#     print("--in if condition--")
+
 facebook_country_raw['week_commencing'] = pd.to_datetime(facebook_country_raw['week_commencing'])
 facebook_country_raw = facebook_country_raw.rename(columns={'page_id': 'Channel ID',
                                                             'page_name': 'Channel Name',
@@ -88,6 +94,12 @@ facebook_country_raw = facebook_country_raw.rename(columns={'page_id': 'Channel 
 
 
 # In[6]:
+
+
+facebook_country_raw
+
+
+# In[7]:
 
 
 channel_ids = socialmedia_accounts['Channel ID'].unique().tolist()
@@ -122,14 +134,18 @@ test_functions.test_duplicates(facebook_country_raw, ['Channel ID', 'w/c', 'YT-_
                                test_step='Check no duplicates from redshift returned')
 
 
-# In[7]:
+# In[8]:
 
 
 # filter to relevant channel ids
 facebook_country = facebook_country_raw[facebook_country_raw['Channel ID'].isin(channel_ids)]
 
+print(facebook_country.shape)
+
 # fill missing countries 
 facebook_country['YT-_FBE_codes'] = facebook_country['YT-_FBE_codes'].replace('', 'ZZ')
+
+print(facebook_country.shape)
 
 # filter to relevant countries
 test_functions.test_inner_join(facebook_country, 
@@ -143,8 +159,10 @@ facebook_country = facebook_country.merge(country_codes[['YT-_FBE_codes', 'Place
                                           on='YT-_FBE_codes', 
                                           how='left').drop(columns=['YT-_FBE_codes'])
 
+print(facebook_country.shape)
 
-# In[8]:
+
+# In[9]:
 
 
 # Group by specified columns and sum the fb_metric_value
@@ -167,21 +185,30 @@ test_functions.test_percentage(facebook_country,
                                test_step='summing country % per week & account')
 
 
-# In[9]:
+# In[10]:
+
+
+facebook_country
+
+
+# In[11]:
 
 
 # calculate rolling average for missing weeks ?
 avg_country_df = calculate_rolling_avg_country_split(facebook_country, 'country_%', 
                                                      week_tester['w/c'].min(), week_tester['w/c'].max())
 
+if len(avg_country_df) > 0:
 # new channels have missing country splits for the first few weeks
-avg_backfill_country_df = apply_first_split_backfill(avg_country_df, 
+    avg_backfill_country_df = apply_first_split_backfill(avg_country_df, 
                                                           socialmedia_accounts, 
                                                           week_tester
                                                          )
+else:
+    avg_backfill_country_df = pd.DataFrame(columns=['Channel ID', 'w/c'])
 
 
-# In[10]:
+# In[13]:
 
 
 # Canonical channel list and canonical week list
@@ -220,16 +247,20 @@ filled_grid = filled_grid.drop(columns=['_merge'])
 
 # Join per-channel rolling averages (already computed) to supply fill values
 # Suffix `_avg` ensures we can distinguish average columns from originals
-result_df = filled_grid.merge(
-    avg_backfill_country_df,
-    on=['Channel ID', 'w/c'],
-    how='left',
-    suffixes=['', '_avg']
-).drop_duplicates()
+if len(avg_backfill_country_df) > 0 :
+    result_df = filled_grid.merge(
+        avg_backfill_country_df,
+        on=['Channel ID', 'w/c'],
+        how='left',
+        suffixes=['', '_avg']
+    ).drop_duplicates()
 
-# Fill NaNs in original columns with per-channel averages (only where original is missing)
-result_df['PlaceID']   = result_df['PlaceID'].fillna(result_df['PlaceID_avg'])
-result_df['country_%'] = result_df['country_%'].fillna(result_df['country_%_avg'])
+    # Fill NaNs in original columns with per-channel averages (only where original is missing)
+    result_df['PlaceID']   = result_df['PlaceID'].fillna(result_df['PlaceID_avg'])
+    result_df['country_%'] = result_df['country_%'].fillna(result_df['country_%_avg'])
+else:
+    result_df = filled_grid    
+
 
 # duplicates because there is a row expansion between main dataset and average for weeks that have country data
 cols = ['Channel ID', 'Channel Name', 'w/c', 'PlaceID', 'country_%']
@@ -240,7 +271,7 @@ result_df = result_df[cols].drop_duplicates().dropna(subset='country_%')
 # - Filled `PlaceID` / `country_%` from per-channel averages where originals were NaN
 
 
-# In[11]:
+# In[15]:
 
 
 # Iran = PlaceID "IRN"
@@ -249,11 +280,11 @@ IRAN_CODE = "IRN"
 result_df = fix_country_one_percent_prev_week(
     result_df,
     IRAN_CODE,
-    ["2026-01-12"]
+    ["2026-01-19","2026-01-12"]
 )
 
 
-# In[13]:
+# In[16]:
 
 
 #sanity checks 
@@ -273,7 +304,7 @@ print(result_df[(result_df['w/c'] == '2026-01-12') & (result_df['Channel ID'] ==
 print(result_df[(result_df['w/c'] == '2026-01-05') & (result_df['Channel ID'] == 'FBE102186576502930')].sort_values('PlaceID')['country_%'].sum())
 
 
-# In[12]:
+# In[17]:
 
 
 # missing weeks per page_id
@@ -298,7 +329,7 @@ test_functions.test_duplicates(result_df,
                                test_step='After rolling average: Check no duplicates from redshift returned')
 
 
-# In[13]:
+# In[18]:
 
 
 file_path = f"../data/processed/{platformID}"
@@ -309,8 +340,8 @@ result_df[cols].to_csv(f"{file_path}/{gam_info['file_timeinfo']}_{platformID}_RE
                         index=None)
 
 
-# In[ ]:
+# In[19]:
 
 
-
+result_df
 

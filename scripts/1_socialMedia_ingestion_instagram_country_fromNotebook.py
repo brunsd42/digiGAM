@@ -278,7 +278,7 @@ IRAN_CODE = "IRN"
 ig_country_df = fix_country_one_percent_prev_week(
     ig_country_df,
     IRAN_CODE,
-    ["2026-01-12"]
+    ["2026-01-19","2026-01-12"]
 )
 
 

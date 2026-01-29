@@ -283,8 +283,12 @@ def calculate_rolling_avg_country_split(df, metric_col='rescaled_percentage', mi
         results.append(grp[['Channel ID', 'PlaceID', metric_col]].reset_index())
 
     # Combine all
-    result = pd.concat(results, ignore_index=True)
-    return result[['Channel ID', 'PlaceID', 'w/c', metric_col]]
+    if len(results) > 0 :
+        result = pd.concat(results, ignore_index=True)
+        result = result[['Channel ID', 'PlaceID', 'w/c', metric_col]]
+    else:
+        result = pd.DataFrame()   
+    return result
 
 
 def apply_first_split_backfill(
