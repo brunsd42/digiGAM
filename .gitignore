@@ -27,10 +27,12 @@ code/__pycache__
 helper/__pycache__
 notebooks/_archive
 test/**/
-venv/
 
 
 # Docs build artifacts
 docs/build/
 docs/_build/
 
+# envs 
+.digigam_venv/
+venv/

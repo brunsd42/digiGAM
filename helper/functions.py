@@ -180,67 +180,54 @@ def lookup_loader(gam_info, platformID, script,
 
 ################################ single platform calculations
 
-def fix_country_one_percent_prev_week(df, country_code, week_list):
-    print(f"Fixing Iran reach to 1% of previous week's value for weeks: {week_list}")
-    
-    df = df.copy()
-    df = df.sort_values(["Channel ID", "w/c"])   # ensure time order if needed
+def fix_country_custom_pct_rel(df, country_code, week_to_pct):
+    """
+    week_to_pct maps week -> MULTIPLIER (e.g. 0.01, 0.64)
+    """
+    print("Fixing country percentages with mapping (multipliers):")
+    print(week_to_pct)
 
-    # Filter affected weeks only
-    affected = df[df['w/c'].isin(set(week_list))]
+    df = df.copy()
+
+    affected_weeks = set(week_to_pct.keys())
+    affected = df[df['w/c'].isin(affected_weeks)]
     print("Affected rows:", affected.shape)
 
     for (channel, wc), group in affected.groupby(['Channel ID', 'w/c']):
+        
+        wc_str = str(wc.date())
 
-        # --- Find previous week for THIS channel ---
-        all_weeks = (
-            df.loc[df['Channel ID'] == channel, "w/c"]
-            .drop_duplicates()
-            .sort_values()
-            .tolist()
-        )
-
-        idx = all_weeks.index(wc)
-        if idx == 0:
-            # No previous week → skip (or set fallback, your choice)
+        if wc_str not in week_to_pct:
+            print(f"week not found: {wc_str}")
             continue
 
-        prev_week = all_weeks[idx - 1]
+        multiplier = week_to_pct[wc_str]
 
-        # --- Get Iran % from previous week ---
-        prev_week_iran = df[
-            (df['Channel ID'] == channel) &
-            (df['w/c'] == prev_week) &
-            (df['PlaceID'] == country_code)
-        ]["country_%"]
-
-        if prev_week_iran.empty:
+        # identify original IRN value
+        old_country_pct = group.loc[group['PlaceID'] == country_code, 'country_%']
+        if old_country_pct.empty:
             continue
 
-        prev_val = float(prev_week_iran.iloc[0])
-        new_country_pct = prev_val * 0.01  # <-- THE CHANGE
+        old_country_pct = float(old_country_pct.iloc[0])
 
-        # --- Get ORIGINAL Iran % for this affected week ---
-        old_country_pct_series = group.loc[group['PlaceID'] == country_code, 'country_%']
-        if old_country_pct_series.empty:
-            continue
-
-        old_country_pct = float(old_country_pct_series.iloc[0])
+        # NEW LOGIC: scale relative to original value
+        new_country_pct = old_country_pct * multiplier
 
         if abs(old_country_pct - new_country_pct) < 1e-12:
             continue
 
-        # --- Scale other countries proportionally ---
-        scale_factor = (1 - new_country_pct) / max(1 - old_country_pct, 1e-12)
+        # scale non-IRN countries proportionally to maintain sum=1
+        scale_factor = (1 - new_country_pct) / (1 - old_country_pct)
 
-        group_mask = (df['Channel ID'] == channel) & (df['w/c'] == wc)
-        iran_mask = group_mask & (df['PlaceID'] == country_code)
-        other_mask = group_mask & (~iran_mask)
+        group_mask        = (df['Channel ID'] == channel) & (df['w/c'] == wc)
+        country_mask      = group_mask & (df['PlaceID'] == country_code)
+        non_country_mask  = group_mask & (df['PlaceID'] != country_code)
 
-        df.loc[other_mask, "country_%"] *= scale_factor
-        df.loc[iran_mask, "country_%"] = new_country_pct
+        df.loc[non_country_mask, 'country_%'] *= scale_factor
+        df.loc[country_mask, 'country_%'] = new_country_pct
 
     return df
+
 
 def calculate_rolling_avg_country_split(df, metric_col='rescaled_percentage', min_week=None, max_week=None):
     """
@@ -595,53 +582,6 @@ def summary_excel(df, business_part, platformID, gam_info, aggregation_type='new
 
     return weekly_df
     
-'''def calculating_weekly_reach(df, platform, bu, gam_info, service=''):
-    # calculate weekly reach by service, country and week for a given platform 
-    df = df.groupby(['ServiceID', 'Country', 'Week Number'])['Engaged Users by Country'].sum().reset_index()
-    df['YearGAE'] = gam_info['YearGAE']
-    df['PlatformID'] = platform
-
-    df.to_excel(f"../data/singlePlatform/output/WEEKLY_{platform}_{bu}_{service}.xlsx")
-    return df
-'''    
-'''def calculating_annual_reach(df, platform, bu, gam_info, service=''):
-    # calculate weekly global reach by service for a given platform 
-    df_global = df.groupby(['ServiceID', 'PlatformID', 'Week Number'])['Engaged Users by Country'].sum().reset_index()
-    df_global['Country'] = '* Total'
-    
-    # combine weekly by country and global reach
-    weekly_reach = pd.concat([df, df_global])
-    
-    # calculate annual reach by country and service
-    avg_annual_reach = weekly_reach.groupby(['ServiceID', 'Country', 'PlatformID'])['Engaged Users by Country'].sum().reset_index(name='Reach')
-    avg_annual_reach['Reach'] = avg_annual_reach['Reach']/gam_info['number_of_weeks']
-    
-    avg_annual_reach.to_excel(f"../data/output/{platform}_{bu}_{service}.xlsx")
-
-    return avg_annual_reach'''
-'''
-def sainsbury_formula(df, population_col, channel_list, col_name):
-    """
-    Apply the sainsforumula 
-
-    Parameters:
-
-    Returns:
-    bool: True if the test passes, False otherwise.
-
-    Example
-    
-    """
-    def calculate_formula(row):
-        population = row[population_col]
-        product = 1
-        for channel in channel_list:
-            product *= (1 - (row[channel] / population))
-        return (1 - product) * population
-    
-    df[col_name] = df.apply(calculate_formula, axis=1)
-    return df
-'''
 def sainsbury_formula(df, population_col, channel_list, col_name, deal_with_zero=False):
     """
     Apply the Sainsbury formula with optional shortcut logic.
