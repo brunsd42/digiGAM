@@ -1,3 +1,14 @@
+"""
+Core helper functions for digiGAM ingestion.
+
+This module includes:
+- Lookup loading and validation
+- Piano/AT Internet API query conversion
+- API pagination and fetching logic
+- Shared utilities for ingestion scripts
+
+All functions are used by ingestion pipelines across platforms.
+"""
 from IPython.display import display
 
 import os
@@ -9,15 +20,106 @@ import json
 import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-import missingno as msno
 
 import urllib.parse
 
-import security_config
-import test_functions
-    
+# --- Project/package imports
+from pathlib import Path
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+import helper.security_config
+import helper.test_functions as test_functions
+from helper.logging_utils import setup_logger
+logger = setup_logger(__name__)
+
+# points to: GAM_pivot/helper/GAM_Lookup.xlsx
+LOOKUP_XLSX = Path(__file__).resolve().parent / "GAM_Lookup.xlsx"
+
+######################## Lookup File
+
+def load_and_validate_all_lookups(service_cols = ['ServiceID', 'Type'],
+                                  country_cols = ['PlaceID', 'Population2020'],
+                                  platform_cols = ['PlatformID', 'Type'],
+                                  time_cols = ['w/c'],
+                                  test_script = ""
+                                 ):
+    """
+    Load all lookup tables and run structural tests.
+
+    Parameters
+    ----------
+    service_cols : list[str]
+        Columns to load from the ServiceID sheet.
+    country_cols : list[str]
+        Columns to load from the CountryID sheet.
+    platform_cols : list[str]
+        Columns to load from the PlatformID sheet.
+    time_cols : list[str]
+        Columns to load from the GAM Period sheet.
+    test_script : str
+        Prefix used for test numbering.
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - country_codes
+        - platform_codes
+        - service_codes
+        - time_codes
+    """
+    path = LOOKUP_XLSX
+
+    country_codes = pd.read_excel(path, sheet_name='CountryID')[country_cols]
+    platform_codes = pd.read_excel(path, sheet_name='PlatformID')[platform_cols]
+    service_codes = pd.read_excel(path, sheet_name='ServiceID')[service_cols]
+    time_codes = pd.read_excel(path, sheet_name='GAM Period')[time_cols]
+
+    # Run tests once centrally
+    test_functions.test_lookup_files(country_codes, country_cols, 
+                                     [f"{test_script}_01",f"{test_script}_02",f"{test_script}_03"],
+                                     test_step="CountryID")
+    test_functions.test_lookup_files(platform_codes, platform_cols, 
+                                     [f"{test_script}_04",f"{test_script}_05",f"{test_script}_06"],
+                                     test_step="PlatformID")
+    test_functions.test_lookup_files(service_codes, service_cols, 
+                                     [f"{test_script}_07",f"{test_script}_08",f"{test_script}_09"],
+                                     test_step="ServiceID")
+    test_functions.test_lookup_files(time_codes, time_cols, 
+                                     [f"{test_script}_10",f"{test_script}_11",f"{test_script}_12"],
+                                     test_step="GAM Period")
+
+    return {
+        'country_codes': country_codes,
+        'platform_codes': platform_codes,
+        'service_codes': service_codes,
+        'time_codes': time_codes,
+    }
+
 ################### PIANO
-def convert_url_to_query(url, start, end):
+def convert_url_to_query(url: str, 
+                          start: str, 
+                          end: str) -> dict | None:
+    
+    """
+    Decode a Piano API URL and inject start/end dates.
+
+    Parameters
+    ----------
+    url : str
+        Encoded Piano API URL containing the `param` payload.
+    start : str
+        Start date (YYYY-MM-DD).
+    end : str
+        End date (YYYY-MM-DD).
+
+    Returns
+    -------
+    dict or None
+        Parsed JSON structure for the API request.
+    """
+
     # Extract the query parameter from the URL
     parsed_url = urllib.parse.urlparse(url)
     query_param = urllib.parse.parse_qs(parsed_url.query).get('param', [None])[0]
@@ -39,6 +141,34 @@ def convert_url_to_query(url, start, end):
         return None
 
 def fetch_data(page_num, data, api_query_key):
+    """
+    Fetch a single page of results from the Piano / AT Internet Data API.
+
+    This function sends a POST request to the Piano endpoint
+    (`/v3/data/getData`) using the provided query payload. It injects the
+    desired page number, applies retry handling, and returns the JSON
+    response.
+
+    Parameters
+    ----------
+    page_num : int
+        The page number to request from the API.
+    data : dict
+        JSON payload for the API request. The function mutates this
+        dictionary by setting the `"page-num"` key.
+    api_query_key : str
+        API key used for authentication via the `x-api-key` header.
+
+    Returns
+    -------
+    dict
+        The parsed JSON response from Piano when the request succeeds.
+
+    Raises
+    ------
+    RuntimeError
+        If the API returns a non-200 HTTP status code.
+    """
     api_endpoint = 'https://api.atinternet.io/v3/data/getData'
 
     # Define the request headers with the API key
@@ -54,14 +184,29 @@ def fetch_data(page_num, data, api_query_key):
     
     """Fetch data from a specific page number."""
     data["page-num"] = page_num
-    response = session.post(api_endpoint, headers=headers, json=data)
+    response = session.post(api_endpoint, headers=headers, json=data, timeout=30)
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"Error {response.status_code}: {response.text}")
-        return None
+        logger.error(f"Error {response.status_code}: {response.text}")
+        raise RuntimeError(f"API error {response.status_code}: {response.text}")
 
 def api_call(data, api_query_key):
+    """
+    Run a full Piano API call over all paginated responses.
+
+    Parameters
+    ----------
+    data : dict
+        JSON query payload for Piano API.
+    api_query_key : str
+        API key for authentication.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Combined rows from all pages.
+    """
     
     # Initialize a list to store all rows of data
     all_data_records = []
@@ -84,8 +229,30 @@ def api_call(data, api_query_key):
     # Convert all data into a pandas DataFrame
     return pd.DataFrame(all_data_records)
 
+# not used so far
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ######################## REDSHIFT 
 def execute_sql_query(sql_query):
+    '''
+    # sphinx-autodoc-skip
+    '''
     host = security_config.REDSHIFT_HOST
     port = security_config.REDSHIFT_PORT
     user = security_config.REDSHIFT_USER
@@ -114,6 +281,9 @@ def execute_sql_query(sql_query):
 def lookup_loader(gam_info, platformID, script, 
                   with_country=False, country_col=['PlaceID'],
                   with_pop_col=False):
+    '''
+    # sphinx-autodoc-skip
+    '''
     # week 
     week_cols = ['w/c']
     week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
@@ -182,6 +352,8 @@ def lookup_loader(gam_info, platformID, script,
 
 def fix_country_custom_pct_rel(df, country_code, week_to_pct):
     """
+    # sphinx-autodoc-skip
+    
     week_to_pct maps week -> MULTIPLIER (e.g. 0.01, 0.64)
     """
     print("Fixing country percentages with mapping (multipliers):")
@@ -231,6 +403,8 @@ def fix_country_custom_pct_rel(df, country_code, week_to_pct):
 
 def calculate_rolling_avg_country_split(df, metric_col='rescaled_percentage', min_week=None, max_week=None):
     """
+    # sphinx-autodoc-skip
+    
     For each channel and place, generate a full Monday calendar from min_week to max_week (inclusive),
     and compute the prev-4-week rolling average (shifted by 1) for every week, even if missing in original data.
     The metric column contains the country split (% per country).
@@ -292,6 +466,8 @@ def apply_first_split_backfill(
     drop_residual_na: bool = True     # drop any rows that remain NaN in value_col after fills
 ) -> pd.DataFrame:
     """
+    # sphinx-autodoc-skip
+    
     Make `avg_country_df[value_col]` non-null by:
       1) Backfilling earlier weeks (>= Start, < first non-null week) from the first available split per channel.
       2) Optionally forward/backward fill within each (Channel ID, PlaceID).
@@ -427,6 +603,8 @@ def apply_first_split_backfill(
 
 def gnl_expander(df):
     """
+    # sphinx-autodoc-skip
+    
     Duplicate rows where ServiceID == 'GNL' into two rows with ServiceID 'BNI' and 'BNO'.
 
     Parameters:
@@ -450,6 +628,8 @@ def gnl_expander(df):
 
 def filter_channels_by_weeks(df, week_col='w/c', channel_col='Channel ID', min_weeks=12):
     """
+    # sphinx-autodoc-skip
+    
     Filters channels that have at least `min_weeks` of data and reports excluded channels.
 
     Parameters:
@@ -487,31 +667,16 @@ def filter_channels_by_weeks(df, week_col='w/c', channel_col='Channel ID', min_w
     return filtered_df
     
 def include_uk_decision(df, lookup):
+    '''
+    # sphinx-autodoc-skip
+    '''
     temp = df.merge(lookup[['Channel ID', 'Excluding UK']], on=['Channel ID'] , how='left')
     return temp[~((temp['PlaceID']=='UK') & (temp['Excluding UK']=='Yes'))]
-        
-
-'''def calculate_annualy(df, platform, gam_info, aggregation_pattern='year'):
-    world_avg = df.groupby(['ServiceID', 'w/c'])['Reach'].sum().reset_index()
-    world_avg = world_avg.groupby('ServiceID')['Reach'].mean().reset_index()
-    world_avg['PlaceID'] = 'Total'
-    #display(world_avg)
-
-    if aggregation_pattern == 'year':
-        year_avg = df.groupby(['ServiceID', 'PlaceID'])['Reach'].sum().reset_index()
-        year_avg['Reach'] =  year_avg['Reach']/gam_info['number_of_weeks']
-        #display(year_avg.groupby('Service Code')['Reach'].sum().reset_index())
-    else: 
-        print('calculating the average and not divding by 52')
-        year_avg = df.groupby(['ServiceID', 'PlaceID', 'w/c'])['Reach'].sum().reset_index()
-        year_avg = year_avg.groupby(['ServiceID', 'PlaceID'])['Reach'].mean().reset_index()
-        
-    annual_df = pd.concat([world_avg, year_avg], )
-    annual_df['PlatformID'] = platform
-    annual_df['YearGAE'] = gam_info['YearGAE']
-    return annual_df'''
 
 def calculate_annualy(df, platformID, gam_info, aggregation_type='new'):
+    '''
+    # sphinx-autodoc-skip
+    '''
     # Calculate world average
     world_avg = df.groupby(['ServiceID', 'w/c'])['Reach'].sum().reset_index()
     world_avg = world_avg.groupby('ServiceID')['Reach'].mean().reset_index()
@@ -559,6 +724,9 @@ def calculate_annualy(df, platformID, gam_info, aggregation_type='new'):
 
 def summary_excel(df, business_part, platformID, gam_info, aggregation_type='new',
                   store_annual=False):
+    '''
+    # sphinx-autodoc-skip
+    '''
     weekly_df = df.copy()
     weekly_df = weekly_df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
     weekly_df['PlatformID'] = platformID
@@ -584,6 +752,8 @@ def summary_excel(df, business_part, platformID, gam_info, aggregation_type='new
     
 def sainsbury_formula(df, population_col, channel_list, col_name, deal_with_zero=False):
     """
+    # sphinx-autodoc-skip
+    
     Apply the Sainsbury formula with optional shortcut logic.
 
     Parameters:
@@ -617,6 +787,9 @@ def sainsbury_formula(df, population_col, channel_list, col_name, deal_with_zero
     return df
 
 def calculate_weekly_sumServices(df, serviceID, platformID, gam_info):
+    '''
+    # sphinx-autodoc-skip
+    '''
     df = df.copy()
     # temporary to explain discrepancy to minnie's values
     df_weekly = df.groupby(['PlaceID', 'w/c'])['Reach'].sum().reset_index()
@@ -634,7 +807,9 @@ def calculate_weekly_sumServices(df, serviceID, platformID, gam_info):
     return df_weekly
 
 def calculate_weekly_Services(df, serviceID, platformID, pop_size_col, gam_info, combi_type='sainsbury', ):
-    
+    '''
+    # sphinx-autodoc-skip
+    '''
     if len(df) == 0:
         print('no data in the dataframe')
         return df
@@ -671,6 +846,8 @@ def process_overlap(data, service1, service2, grouped_service,
                     overlap_type, overlap_service_id, platformID, gam_info, path,
                     country_codes, pop_size_col, overlaps='n/a'):
     """
+    # sphinx-autodoc-skip
+    
     Combines two services into a grouped service, applying overlap logic if both are present.
     If only one service has data, it is used directly.
     """
@@ -766,6 +943,8 @@ def process_overlap_v2(data, service1, service2, grouped_service,
                        overlaps, overlap_type, overlap_service_id, platformID, gam_info, path,
                        country_codes, pop_size_col, service3=None):  
     """
+    # sphinx-autodoc-skip
+    
     Combines services into a grouped service, applying overlap logic if applicable.
     If only one or two services are available, uses them directly.
     service3 is only used for overlap_type 'sainsbury'.
@@ -869,7 +1048,9 @@ def process_overlap_v2(data, service1, service2, grouped_service,
 
 def calculate_aggregated_services(data, stages, platform, gam_info, path, 
                                   overlaps, country_codes, pop_size_col):
-
+    '''
+    # sphinx-autodoc-skip
+    '''
     for stage in stages:
         grouped_service, s1, s2, o_type, o_id, use_v2, s3 = stage
         data[grouped_service] = {'weekly': pd.DataFrame(), 'annual': pd.DataFrame()}
@@ -919,6 +1100,8 @@ def calculate_aggregated_services(data, stages, platform, gam_info, path,
 
 def compare_or_update_reference(df, reference_path, cols, update=False):
     """
+    # sphinx-autodoc-skip
+    
     Compare DataFrame to a reference file (Pickle for accuracy).
     If update=True, overwrite the reference file with the new DataFrame.
     
@@ -953,18 +1136,30 @@ def compare_or_update_reference(df, reference_path, cols, update=False):
         
 # Utility functions
 def load_excel(path, sheet_name=None):
+    '''
+    # sphinx-autodoc-skip
+    '''
     if sheet_name != None: 
         return pd.read_excel(path, sheet_name=sheet_name, engine='openpyxl')
     else:
         return pd.read_excel(path, engine='openpyxl')
 
 def load_csv(path):
+    '''
+    # sphinx-autodoc-skip
+    '''
     return pd.read_csv(path)
 
 def standardize_country_codes(df, column='Country Code'):
+    '''
+    # sphinx-autodoc-skip
+    '''
     return df.replace({column: {'WLF': 'WFI', '* Total': 'Total'}})
 
 def run_comparison(original_df, new_df, column_mapping, key_columns, method='integer', threshold=0.0001):
+    '''
+    # sphinx-autodoc-skip
+    '''
     if method == 'integer':
         return compare_dataframes_integer(original_df, new_df, column_mapping, key_columns)
     elif method == 'percentage':
@@ -974,6 +1169,8 @@ def run_comparison(original_df, new_df, column_mapping, key_columns, method='int
 
 def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_new):
     """
+    # sphinx-autodoc-skip
+    
     Compare two DataFrames and return rows that are missing or different.
 
     Parameters:
@@ -1026,17 +1223,13 @@ def compare_dataframes_integer(original_df, new_df, column_mapping, key_columns_
     (merged['_merge'] == 'both') &
     (orig_comp.values != new_comp.values).any(axis=1)
     ]
-    '''differing_rows = merged[
-        (merged['_merge'] == 'both') &
-        merged[[f"{col}_orig" for col in comparison_cols]].ne(
-            merged[[f"{col}_new" for col in comparison_cols]].values
-        ).any(axis=1)
-        ]'''
 
     return missing_from_new, differing_rows
 
 def compare_dataframes_percentage(original_df, new_df, column_mapping, key_columns_new, threshold=0.0001):
     """
+    # sphinx-autodoc-skip
+    
     Compare two DataFrames and return rows that are missing or have percentage differences.
 
     Parameters:

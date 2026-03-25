@@ -1,47 +1,526 @@
+"""
+Shared test utilities for ingestion & processing pipelines.
+
+These functions validate:
+- lookup table integrity
+- key presence and join consistency
+- duplicate keys
+- missing values
+- join cardinality (row explosion)
+- uniqueness constraints
+
+All tests log results and update a daily Excel-based logbook.
+
+"""
+
 import pandas as pd
-import os
 from datetime import datetime
-from tqdm import tqdm
-import re
-#from openpyxl import load_workbook
+from pathlib import Path
 from openpyxl import Workbook
 
-import matplotlib.pyplot as plt
-import seaborn as sns
+from helper.logging_utils import setup_logger
+logger = setup_logger(__name__)
 
-import warnings
+# =============================================================================
+# LOOKUP TESTS
+# =============================================================================
 
-from sklearn.preprocessing import MinMaxScaler
-
-########
-import sys
-from pathlib import Path
-
-try:
-    # Works in Python scripts
-    helper_path = Path(__file__).resolve().parent.parent / "helper"
-except NameError:
-    # Works in Jupyter notebooks
-    helper_path = Path().resolve().parent / "helper"
-
-sys.path.insert(0, str(helper_path))
-
-from config import gam_info
-#########
 def test_lookup_files(df, id_columns, test_numbers, test_step):
+    """
+    Run the three standard lookup integrity tests:
     
-    # returns entries
-    test_empty(df, test_numbers[0], test_step=test_step, name='lookup')
-    
-    # unique keys 
-    test_duplicates(df, id_columns, test_numbers[1], test_step=test_step)
-    
-    # missing values
-    test_missing(df, id_columns, test_numbers[2], test_step=test_step, name='lookup')
+    1. `test_not_empty` — ensure the lookup table is not empty  
+    2. `test_no_duplicates` — ensure the ID columns contain unique keys  
+    3. `test_no_missing_values` — ensure required ID columns contain no nulls
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The lookup table being tested.
+    id_columns : list[str]
+        Columns that must be unique and non-null.
+    test_numbers : list[str]
+        Three test-number identifiers, corresponding to the three tests.
+    test_step : str
+        Description of where the lookup is being validated (for logbook tracking).
+    """
+    test_not_empty(df, test_numbers[0], test_step=test_step, name="lookup")
+    test_no_duplicates(df, id_columns, test_numbers[1], test_step=test_step)
+    test_no_missing_values(df, id_columns, test_numbers[2], test_step=test_step, name="lookup")
+
+
+def test_not_empty(df, test_number, test_step="", name="lookup"):
+    """
+    Verify that a DataFrame is not empty.
+
+    Logs the result and records the outcome in the daily test logbook.
+    This is used across ingestion and processing pipelines to ensure
+    lookup tables and intermediate datasets contain at least one row.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The dataset to test.
+    test_number : str
+        Unique test identifier for tracking in the logbook.
+    test_step : str, optional
+        Description of the pipeline step running this test.
+    name : str, optional
+        Friendly name used in log messages (default `"lookup"`).
+    """
+    issues = pd.DataFrame()
+
+    if df.empty:
+        logger.error(f"❌ Test {test_number} failed: {name} DataFrame is empty.")
+        issues = pd.DataFrame({"Issue": [f"{name} DataFrame is empty"]})
+    else:
+        logger.info(f"✅ Test {test_number} passed: {name} DataFrame is not empty.")
+
+    update_logbook(test_number, issues, test=f"test_not_empty ({name})", test_step=test_step)
+
+
+def test_no_duplicates(df, columns, test_number, test_step=""):
+    """
+    Verify that no duplicate key combinations exist in the specified columns.
+
+    This test ensures that lookup tables and enriched datasets maintain
+    the expected uniqueness constraints on their key columns.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Dataset to validate.
+    columns : list[str]
+        Columns that together must form a unique key.
+    test_number : str
+        Unique identifier for logging and issue-list tracking.
+    test_step : str, optional
+        Description of the pipeline step where this test is executed.
+    """
+    issues = (
+        df.groupby(columns, dropna=False)
+          .size()
+          .reset_index(name="Count")
+          .query("Count > 1")
+    )
+
+    if issues.empty:
+        logger.info(f"✅ Test {test_number} passed: No duplicate {columns}.")
+    else:
+        logger.error(f"❌ Test {test_number} failed: Duplicate {columns} found.")
+
+    update_logbook(test_number, issues, test="test_no_duplicates", test_step=test_step)
+
+
+def test_no_missing_values(df, columns, test_number, test_step="", name="lookup"):
+    """
+    Verify that none of the specified key columns contain missing values.
+
+    Used to validate lookup tables, join keys, and enriched fields before
+    downstream joins or aggregations.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Dataset to evaluate.
+    columns : list[str]
+        Columns that must contain no null or missing values.
+    test_number : str
+        Test identifier for logbook tracking.
+    test_step : str, optional
+        Logical pipeline step for test reporting.
+    name : str, optional
+        Friendly name used in log messages (default `"lookup"`).
+    """
+    missing_counts = df[columns].isnull().sum()
+    issues = pd.DataFrame()
+
+    if missing_counts.any():
+        missing_detail = {col: int(cnt) for col, cnt in missing_counts.items() if cnt > 0}
+        logger.error(f"❌ Test {test_number} failed: Missing values detected in {name}: {missing_detail}")
+        issues = pd.DataFrame({"Issue": [f"Missing values: {missing_detail}"]})
+    else:
+        logger.info(f"✅ Test {test_number} passed: No missing values in {name}.")
+
+    update_logbook(test_number, issues, test=f"test_no_missing_values ({name})", test_step=test_step)
+
+# =============================================================================
+# SITE-SPECIFIC TESTS
+# =============================================================================
+
+def test_unique_entries(df, column_name, test_number, test_step=""):
+    """
+    Verify that all values in a specified column are unique.
+
+    This is primarily used for validating ingestion configuration tables,
+    such as ensuring that each report number in `Site_API` appears only
+    once.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Dataset to test.
+    column_name : str
+        Column whose uniqueness must be enforced.
+    test_number : str
+        Identifier used in logs and issue tracking.
+    test_step : str, optional
+        Description of the pipeline stage performing the test.
+    """
+    duplicates = df[df[column_name].duplicated()][column_name]
+
+    if duplicates.empty:
+        logger.info(f"✅ Test {test_number} passed: All values in '{column_name}' are unique.")
+    else:
+        logger.error(f"❌ Test {test_number} failed: Duplicate values detected in '{column_name}'.")
+        logger.info(duplicates.to_string(index=False))
+
+    update_logbook(test_number, duplicates, test="test_unique_entries", test_step=test_step)
+
+# =============================================================================
+# JOIN INTEGRITY TESTS
+# =============================================================================
+
+def test_key_consistency(df_left, df_right, key, test_number, test_step="", focus="both", logger=None):
+    """
+    Verify that df_left and df_right contain matching key values.
+
+    Parameters
+    ----------
+    df_left : pandas.DataFrame
+        Left dataset for comparison.
+    df_right : pandas.DataFrame
+        Right dataset for comparison.
+    key : str or list[str]
+        Join key(s).
+    test_number : str
+        Unique identifier for logging.
+    test_step : str, optional
+        Description of where in the pipeline the test is executed.
+
+    Notes
+    -----
+    Writes issues to the daily logbook automatically.
+    """
+    log = logger.info if hasattr(logger, "info") else print
+
+    key_cols = key if isinstance(key, list) else [key]
+
+    merged = df_left[key_cols].merge(
+        df_right[key_cols],
+        on=key_cols,
+        how="outer",
+        indicator=True
+    )
+
+    issue_left = merged[merged["_merge"] == "left_only"] if focus != "right" else pd.DataFrame()
+    issue_right = merged[merged["_merge"] == "right_only"] if focus != "left" else pd.DataFrame()
+
+    if issue_left.empty and issue_right.empty:
+        log(f"✅ Test {test_number} passed: No key mismatches.")
+    else:
+        log(f"❌ Test {test_number} failed: Key mismatches found.")
+        if not issue_left.empty:
+            log(f"   Left-only: {issue_left.shape[0]}")
+        if not issue_right.empty:
+            log(f"   Right-only: {issue_right.shape[0]}")
+
+    issues = pd.concat([issue_left, issue_right], ignore_index=True).drop_duplicates()
+
+    update_logbook(
+        test_number,
+        issues,
+        test="test_key_consistency",
+        test_step=test_step
+    )
+
+
+def test_join_cardinality(df_left, df_right, key, test_number, test_step="", logger=None):
+    """
+    Ensure that joining df_left to df_right does not increase row count.
+
+    Detects 1→many explosions that would otherwise corrupt metrics.
+
+    Parameters
+    ----------
+    df_left : pandas.DataFrame
+        Baseline dataset.
+    df_right : pandas.DataFrame
+        Enrichment or lookup dataset.
+    key : str or list[str]
+        Join key(s).
+    test_number : str
+        Unique identifier for logging.
+    test_step : str, optional
+        Description of pipeline stage.
+    """
+    log = logger.info if hasattr(logger, "info") else print
+
+    key_cols = key if isinstance(key, list) else [key]
+
+    before = df_left.shape[0]
+
+    merged = df_left[key_cols].merge(
+        df_right[key_cols],
+        on=key_cols,
+        how="left",
+        indicator=True
+    )
+
+    after = merged.shape[0]
+    issues = pd.DataFrame()
+
+    if before == after:
+        log(f"✅ Test {test_number} passed: Join cardinality preserved.")
+    else:
+        dup_mask = merged.duplicated(subset=key_cols, keep=False)
+        issues = merged[dup_mask]
+        log(f"❌ Test {test_number} failed: {issues.shape[0]} rows show join explosion.")
+
+    update_logbook(
+        test_number,
+        issues,
+        test="test_join_cardinality",
+        test_step=test_step
+    )
+
+def test_weeks_presence_per_account(
+    key: str,
+    channel_id_col: list,
+    main_data: pd.DataFrame,
+    week_lookup: pd.DataFrame,
+    channel_lookup: pd.DataFrame,
+    test_number,
+    test_step: str = ''
+):
+    """
+    Check that each channel has all expected weeks present from its Start date onward.
+
+    Parameters
+    ----------
+    key : str
+        Week column name (e.g., 'w/c', 'Week Number').
+    channel_id_col : list[str]
+        Column(s) that uniquely identify the channel/account/report.
+    main_data : pd.DataFrame
+        Observed dataset containing actual weeks.
+    week_lookup : pd.DataFrame
+        Table listing all canonical weeks.
+    channel_lookup : pd.DataFrame
+        Table containing channel start (and optional end) dates.
+    test_number : str
+        Identifier passed to logbook.
+    test_step : str
+        Free text describing pipeline step.
+
+    Returns
+    -------
+    pd.DataFrame
+        Rows representing missing (channel_id, week) combinations.
+    """
+    main_test_data = main_data.copy()
+    week_lookup_test_data = week_lookup.copy()
+    start_dates = channel_lookup.copy()
+    today = pd.Timestamp.today().normalize()
+
+    # ---------------------------
+    # 1. Validate schema
+    # ---------------------------
+    for df_name, df, cols in [
+        ('main_data', main_test_data, channel_id_col + [key]),
+        ('week_lookup', week_lookup_test_data, [key]),
+        ('channel_lookup', start_dates, channel_id_col + ['Start', 'End']),
+    ]:
+        missing_cols = [c for c in cols if c not in df.columns]
+        if missing_cols:
+            raise ValueError(f"{df_name} missing columns: {missing_cols}")
+
+    # ---------------------------
+    # 2. Convert to datetime
+    # ---------------------------
+    if key != 'Week Number':
+        main_test_data[key] = pd.to_datetime(main_test_data[key], errors='coerce', dayfirst=True)
+        week_lookup_test_data[key] = pd.to_datetime(week_lookup_test_data[key], errors='coerce', dayfirst=True)
+    else:
+        main_test_data[key] = pd.to_numeric(main_test_data[key], errors='coerce')
+        week_lookup_test_data[key] = pd.to_numeric(week_lookup_test_data[key], errors='coerce')
+
+    main_test_data = main_test_data.dropna(subset=[key])
+    week_lookup_test_data = week_lookup_test_data.dropna(subset=[key])
+    start_dates = start_dates.dropna(subset=['Start'])
+
+    # ---------------------------
+    # 3. Restrict week_lookup to fully completed weeks
+    # ---------------------------
+    if key != 'Week Number':
+        last_monday_prev_week = today - pd.Timedelta(days=today.weekday() + 7)
+        week_lookup_test_data = week_lookup_test_data[week_lookup_test_data[key] <= last_monday_prev_week]
+
+    # ---------------------------
+    # 4. Build expected grid: (channel × week)
+    # ---------------------------
+    start_dates['_tmp'] = 1
+    week_lookup_test_data['_tmp'] = 1
+
+    expected = (
+        start_dates.merge(week_lookup_test_data, on='_tmp', how='inner')
+        .drop(columns=['_tmp'])
+    )
+
+    expected = expected[expected[key] >= expected['Start']]
+    expected = expected[channel_id_col + ['Start', 'End', key]].drop_duplicates()
+
+    # ---------------------------
+    # 5. Actual data: de-duplicate
+    # ---------------------------
+    actual = main_test_data[channel_id_col + [key]].drop_duplicates()
+
+    # ---------------------------
+    # 6. Missing = expected - actual
+    # ---------------------------
+    missing = expected.merge(
+        actual,
+        on=channel_id_col + [key],
+        how='left',
+        indicator=True
+    )
+    missing = missing[missing['_merge'] == 'left_only']
+    missing = missing.drop(columns=['_merge'])
+    missing = missing[
+        (missing[key] >= missing['Start']) &
+        (missing[key] <= missing['End'].fillna(today))
+    ].sort_values(channel_id_col + [key])
+
+    # ---------------------------
+    # 7. Summary to log
+    # ---------------------------
+    summary = (
+        missing.groupby(channel_id_col)[key]
+        .nunique()
+        .reset_index(name='missing_week_count')
+        .sort_values('missing_week_count', ascending=False)
+    )
+
+    logger.info("\nSummary of missing weeks per channel:")
+    logger.info("\n" + summary.to_string(index=False))
+
+    # ---------------------------
+    # 8. Log to issue logbook
+    # ---------------------------
+    update_logbook(
+        test_number,
+        missing,
+        test='missing weeks by channel since Start',
+        test_step=test_step
+    )
+
+    return missing
+
+# =============================================================================
+# LOGBOOK
+# =============================================================================
+
+def update_logbook(test_number, issues_list, test='', test_step=''):
+    """
+    Update the daily test logbook and optional issue list.
+    Minimal fix version (KISS/DRY).
+    """
+
+    logger.info('...updating logbook...\n')
+    today_date = datetime.now().strftime('%Y-%m-%d')
+
+    # ---------------------------
+    # Paths
+    # ---------------------------
+    project_root = Path(__file__).resolve().parents[1]
+    test_dir = project_root / "test" / f"issue_lists_{today_date}"
+    test_dir.mkdir(parents=True, exist_ok=True)
+
+    logbook_path = test_dir / "_test_logbook.xlsx"
+
+    # ---------------------------
+    # Create logbook if missing
+    # ---------------------------
+    if not logbook_path.exists():
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+        headers = ['test number', 'timestamp', 'pass/fail',
+                   'check file', 'test', 'step']
+        ws.append(headers)
+        wb.save(logbook_path)
+
+    # ---------------------------
+    # Load sheet
+    # ---------------------------
+    logbook_df = pd.read_excel(logbook_path, sheet_name='Sheet1', engine='openpyxl')
+
+    # Ensure required columns exist
+    for col in ['test number', 'timestamp', 'pass/fail',
+                'check file', 'test', 'step']:
+        if col not in logbook_df.columns:
+            logbook_df[col] = ""
+
+    # Remove previous entry for this test
+    logbook_df = logbook_df[logbook_df['test number'] != test_number]
+
+    # ---------------------------
+    # Append fresh row
+    # ---------------------------
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    new_row = {
+        'test number': test_number,
+        'timestamp': timestamp,
+        'pass/fail': '',
+        'check file': '',
+        'test': test,
+        'step': test_step
+    }
+    logbook_df = pd.concat([logbook_df, pd.DataFrame([new_row])], ignore_index=True)
+
+    # ---------------------------
+    # Issues file
+    # ---------------------------
+    if issues_list is not None and hasattr(issues_list, "empty") and not issues_list.empty:
+        file_name = test_dir / f"{test_number}_issue_list.csv"
+        pd.DataFrame(issues_list).to_csv(file_name, index=False)
+        logbook_df.loc[logbook_df['test number'] == test_number, 'pass/fail'] = 'fail'
+        logbook_df.loc[logbook_df['test number'] == test_number, 'check file'] = file_name.name
+    else:
+        logbook_df.loc[logbook_df['test number'] == test_number, 'pass/fail'] = 'pass'
+        logbook_df.loc[logbook_df['test number'] == test_number, 'check file'] = 'no file created :)'
+
+    # ---------------------------
+    # Save back (replace sheet)
+    # ---------------------------
+    with pd.ExcelWriter(logbook_path, engine='openpyxl', mode='a',
+                        if_sheet_exists='replace') as writer:
+        logbook_df.to_excel(writer, sheet_name='Sheet1', index=False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Test to check if all filter elements were returned
 def test_filter_elements_returned(df, filter_elements, column_name, test_number, test_step=''):
+    '''
+    # sphinx-autodoc-skip
+    '''
     print(f"...testing {column_name}...")
     returned_elements = df[column_name].unique().tolist()
     missing_elements = set(filter_elements) - set(returned_elements)
@@ -56,169 +535,11 @@ def test_filter_elements_returned(df, filter_elements, column_name, test_number,
     update_logbook(test_number=test_number, issues_list= issues_df, 
                    test_step=test_step, test='testing missing elements in columns')
 
-def test_weeks_presence_per_account(
-    key: str,
-    channel_id_col: list,
-    main_data: pd.DataFrame,
-    week_lookup: pd.DataFrame,
-    channel_lookup: pd.DataFrame,
-    test_number,
-    test_step: str = ''
-):
-    """
-    Report missing weeks per channel_id_col, only from each channel's Start date onward.
-
-    Parameters
-    ----------
-    key : str
-        Week column name (e.g., 'Week Ending', 'Week Start', etc.). Prefer date-like.
-    main_data : pd.DataFrame
-        Must contain [channel_id_col, key] with actual observed weeks.
-    week_lookup : pd.DataFrame
-        Must contain [key] listing all canonical weeks.
-    channel_lookup : pd.DataFrame
-        Must contain [channel_id_col, 'Start'] indicating when each channel began.
-    test_number : any
-        Identifier passed through to update_logbook.
-    test_step : str
-        A label to append to the logbook.
-
-    Returns
-    -------
-    pd.DataFrame
-        Missing rows for (channel_id_col, key) where key >= Start.
-    """
-
-    main_test_data = main_data.copy()
-    week_lookup_test_data = week_lookup.copy()
-    start_dates = channel_lookup.copy()
-
-    today = pd.Timestamp.today().normalize()
-    # --- Validate schema
-    for df_name, df, cols in [
-        ('main_data', main_test_data,  channel_id_col+[key]),
-        ('week_lookup', week_lookup_test_data, [key]),
-        ('channel_lookup', start_dates, channel_id_col+['Start', 'End']),
-    ]:
-        missing_cols = [c for c in cols if c not in df.columns]
-        if missing_cols:
-            raise ValueError(f"{df_name} is missing required columns: {missing_cols}")
-
-    # --- Harmonize types (dates)
-    if key != 'Week Number':
-        # Robust parsing; works for '13.8.2025' and similar; set dayfirst=True for EU formats
-        main_test_data[key] = pd.to_datetime(main_test_data[key], errors='coerce', dayfirst=True)
-        week_lookup_test_data[key] = pd.to_datetime(week_lookup_test_data[key], errors='coerce', dayfirst=True)
-    else:
-        # Numeric week numbers require a start_week field
-        main_test_data[key] = pd.to_numeric(main_test_data[key], errors='coerce')
-        week_lookup_test_data[key] = pd.to_numeric(week_lookup_test_data[key], errors='coerce')
-        if 'start_week' not in start_dates.columns:
-            raise ValueError("When key == 'Week Number', channel_lookup must include 'start_week'.")
-
-    # --- Drop unparseable rows
-    main_test_data = main_test_data.dropna(subset=[key])
-    week_lookup_test_data = week_lookup_test_data.dropna(subset=[key])
-    start_dates = start_dates.dropna(subset=['Start'] if key != 'Week Number' else ['start_week'])
-
-    # --- Optional: restrict to last fully completed week (avoids partial-current-week noise)
-    if key != 'Week Number':
-        last_monday_prev_week = today - pd.Timedelta(days=today.weekday() + 7)  # Monday of last week
-        week_lookup_test_data = week_lookup_test_data[week_lookup_test_data[key] <= last_monday_prev_week]
-    # If using week numbers, define your numeric cutoff logic similarly.
-
-    # --- De-duplicate and keep only necessary columns
-    main_existing = main_test_data[channel_id_col + [key]].drop_duplicates()
-    week_lookup_test_data = week_lookup_test_data[[key]].drop_duplicates()
-    start_dates = start_dates[channel_id_col + ['Start', 'End'] + (['start_week'] if key == 'Week Number' else [])].drop_duplicates()
-
-
-    # --- Build expected (channel_id_col × week) only for weeks >= Start
-    start_dates['_tmp'] = 1
-    week_lookup_test_data['_tmp'] = 1
-    expected = start_dates.merge(week_lookup_test_data, on='_tmp', how='inner').drop(columns=['_tmp'])
-
-    if key != 'Week Number':
-        expected = expected[expected[key] >= expected['Start']]
-    else:
-        expected = expected[expected[key] >= expected['start_week']]
-
-    expected = expected[channel_id_col+[key, 'End'] + (['Start'] if key != 'Week Number' else ['start_week'])].drop_duplicates()
-
-    # --- Anti-join: expected minus actual
-    missing = expected.merge(
-        main_existing,
-        on=channel_id_col + [key],
-        how='left',
-        indicator=True
-    )
-    missing = missing[missing[key] >= missing['Start']] # add =
-    missing = missing[missing[key] <= missing['End'].fillna(today)]# add =
-    
-    missing = (
-        missing[missing['_merge'] == 'left_only']
-        .drop(columns=['_merge'])
-        .sort_values(channel_id_col+[key])
-    ).sort_values(by=key)[channel_id_col+['Start', 'End', key]]
-
-    # --- Output
-    if missing.empty:
-        print("✅ No missing weeks from each channel’s Start onward.")
-    else:
-        print("❌ Missing weeks from Start onward:")
-        print(missing)
-
-        summary = (
-            missing.groupby(channel_id_col)[key]
-            .nunique()
-            .reset_index(name='missing_week_count')
-            .sort_values('missing_week_count', ascending=False)
-        )
-        print("\nSummary of missing weeks per channel_id_col:")
-        print(summary)
-
-    update_logbook(test_number, missing, 'missing weeks by channel since Start', test_step)
-    return missing
-
-
-def test_inner_join(df_left, df_right, key, test_number, test_step='', focus='both'):
-    resulting_df = df_left[key].merge(df_right[key], on=key, how='outer', indicator=True, 
-                                      suffixes=('_left', '_right'))
-    
-    # Initialize issue dataframes
-    issue_df_left = pd.DataFrame()
-    issue_df_right = pd.DataFrame()
-    
-    # Test to ensure no data is lost from df_left
-    if (resulting_df[resulting_df['_merge'] == 'left_only'].shape[0] > 0) & (focus !='right'):
-        issue_df_left = resulting_df[resulting_df['_merge'] == 'left_only']
-    
-    # Test to ensure no data is lost from df_right
-    if (resulting_df[resulting_df['_merge'] == 'right_only'].shape[0] > 0) & (focus !='left'):
-        issue_df_right = resulting_df[resulting_df['_merge'] == 'right_only']
-    
-    # Check if there are any issues with the join
-    if issue_df_left.empty and issue_df_right.empty:
-        print(f"✅ Inner join test {test_number} successful: No issues found.")
-    else:
-        
-        print(f"Inner join test {test_number} failed: Issues found.")
-        if not issue_df_left.empty:
-            issue_df_left = issue_df_left.drop_duplicates()
-            
-            print(f"Issues with df_left (rows present in df_left but not in df_right)")
-            
-        if not issue_df_right.empty:
-            issue_df_right = issue_df_right.drop_duplicates()
-            
-            print(f"Issues with df_right (rows present in df_right but not in df_left)")
-            
-    update_logbook(test_number, pd.concat([issue_df_left, issue_df_right]), 
-                   test='testing inner join - dataloss between two tables', test_step=test_step)
-
 # Test to check if the country percentage adds up to a 100% #former test_country_percentage
 def test_percentage(df, groupby_columns, test_number, test_step, percentage_col='country_%'):
-
+    '''
+    # sphinx-autodoc-skip
+    '''
     test_df = df.copy()
     
     # Group by fb_page_name and fb_metric_end_time, and sum country_%
@@ -229,22 +550,10 @@ def test_percentage(df, groupby_columns, test_number, test_step, percentage_col=
 
     update_logbook(test_number, issues_df, 'testing country percentage', test_step)
 
-# test for duplicate entries 
-def test_duplicates(df, columns, test_number, test_step=''):
-    # Check if any country/channel occurs more than once a week
-    issues_df = df.groupby(columns).size().reset_index(name='Count')
-    issues_df = issues_df[issues_df['Count'] > 1]
-    
-    # Print the results
-    if not issues_df.empty:
-        print(f"❌ Test {test_number} failed: The following combinations occur more than once a week")
-        
-    else:
-        print(f"✅ Test {test_number} passed: No combinations occurs more than once a week.")
-    update_logbook(test_number, issues_df, 'testing the combination of columns for uniqueness', test_step)
-
 def test_non_null_and_positive(df, numeric_columns=None, test_number='', test_step=''):
     """
+    # sphinx-autodoc-skip
+    
     Test that the numeric columns of the dataframe have no NaN values and contain values > 0.
 
     Parameters:
@@ -282,44 +591,13 @@ def test_non_null_and_positive(df, numeric_columns=None, test_number='', test_st
     update_logbook(test_number, issues_df, test='Check for NaN and positive values', test_step=test_step)
 
 
-def test_empty(df, test_number, test_step='', name='lookup'):
-    """
-    Test if a DataFrame is empty.
-    Logs the result and updates the logbook.
-    """
-    issues_df = pd.DataFrame()
-
-    if df.empty:
-        print(f"❌ Test {test_number} failed: {name} DataFrame is empty.")
-        issues_df = pd.DataFrame({'Issue': [f"{name} DataFrame is empty"]})
-    else:
-        print(f"✅ Test {test_number} passed: {name} DataFrame is not empty.")
-
-    update_logbook(test_number, issues_df, test=f"Testing if {name} DataFrame is empty", test_step=test_step)
-
-def test_missing(df, columns, test_number, test_step='', name='lookup'):
-    """
-    Test if there are missing values in specified columns of a DataFrame.
-    Logs the result and updates the logbook.
-    """
-    # Count missing values in the specified columns
-    missing_counts = df[columns].isnull().sum()
-    issues_df = pd.DataFrame()
-
-    if missing_counts.any():
-        print(f"❌ Test {test_number} failed: empty values detected in {name}.")
-        # Prepare details for logbook
-        missing_detail = {col: int(count) for col, count in missing_counts.items() if count > 0}
-        issues_df = pd.DataFrame({'Issue': [f"empty values: {missing_detail}"]})
-    else:
-        print(f"✅ Test {test_number} passed: No empty values in {name}.")
-
-    update_logbook(test_number, issues_df, test=f"Testing empty values in {name}", test_step=test_step)
-    
 
 #############################################################################################################
 # test same values
 def test_allowed_values(df, test_column, allowed_values, test_number, test_step=''):
+    '''
+    # sphinx-autodoc-skip
+    '''
     # Check if any country/channel occurs more than once a week
     issues_df = df[~df[test_column].isin(allowed_values)]
     
@@ -333,6 +611,8 @@ def test_allowed_values(df, test_column, allowed_values, test_number, test_step=
 
 def test_hierarchy_reach(test_number, mode, gam_info, df, key, metric_col, test_step, round_metric=False):
     """
+    # sphinx-autodoc-skip
+    
     Test that the reach of each parent service is not smaller than any of its child services, but it is okay if it is smaller than the sum of its child services.
 
     Parameters:
@@ -437,7 +717,9 @@ def test_hierarchy_reach(test_number, mode, gam_info, df, key, metric_col, test_
     return issues_df
 
 def test_adding_WWW(start, test_val, end, test_number, test_step='', ):
-    
+    '''
+    # sphinx-autodoc-skip
+    '''
     result = end == start-test_val+2*test_val
     if result == True: 
         print("✅ passed the test! ")
@@ -449,7 +731,9 @@ def test_adding_WWW(start, test_val, end, test_number, test_step='', ):
                    'testing addition of services / platform', test_step)
 
 def test_adding_wseWWW_enw(start, test_val, end, test_number, test_step='', ):
-    
+    '''
+    # sphinx-autodoc-skip
+    '''
     result = end == start-test_val+4*test_val
     if result == True: 
         print("✅ passed the test! ")
@@ -461,28 +745,11 @@ def test_adding_wseWWW_enw(start, test_val, end, test_number, test_step='', ):
                    'testing addition of services / platform', test_step)
 
 
-
-def test_join_rowCount(df_left, df_right, key, test_number, test_step=''):
-    ''' this test ensures a join won't add additional rows to the reach data '''
-    rowCount_before = df_left.shape[0]
-    resulting_df = df_left[key].merge(df_right[key], on=key, how='left', indicator=True, 
-                                      suffixes=('_left', '_right'))
-    rowCount_after = resulting_df.shape[0]
-    
-    # Initialize issue dataframes
-    issue_df = pd.DataFrame()
-    
-    # Test to ensure no data is lost from df_left
-    if rowCount_before == rowCount_after:
-        print(f"join - row count test {test_number} successful: No issues found.")   
-    else:
-        duplicated_keys = resulting_df[key][resulting_df.duplicated(key, keep=False)]
-        issue_df = resulting_df[resulting_df[key].isin(duplicated_keys)]
-            
-    update_logbook(test_number, issue_df, 
-                   test='testing row counts before/after join', test_step=test_step)
 # test for above 1 where shouldnt'
 def test_larger_val(df, column, test_number, test_step='', val=1):
+    '''
+    # sphinx-autodoc-skip
+    '''
     # Check if any country/channel occurs more than once a week
     issues_df = df[df[column]>val]
     
@@ -494,7 +761,11 @@ def test_larger_val(df, column, test_number, test_step='', val=1):
         print("✅ Pass - No larger than 1 values")
     update_logbook(test_number, issues_df, 'testing the combination of columns for too large values', test_step)
     
+
 def test_missing_hierarchy_levels(gam_info, df, test_number):
+    '''
+    # sphinx-autodoc-skip
+    '''
     # Read the hierarchy from the Excel file
     hierarchy_df = pd.read_excel(f"../../{gam_info['lookup_file']}", 
                                  sheet_name='ServiceID', 
@@ -514,6 +785,9 @@ def test_missing_hierarchy_levels(gam_info, df, test_number):
     return issues_df
 
 def test_merge_row_count(original_df, merged_df, test_number, test_step):
+    '''
+    # sphinx-autodoc-skip
+    '''
     print('...testing if merge leads to more rows on the metric side')
     # Check if the number of rows in the merged DataFrame is less than or equal to the number of rows in the original DataFrame
     if len(merged_df) == len(original_df):
@@ -529,7 +803,11 @@ def test_merge_row_count(original_df, merged_df, test_number, test_step):
     
 
 # test for negative entries 
+# sphinx-autodoc-skip
 def test_negative_values(df, column, test_number, test_step=''):
+    '''
+    # sphinx-autodoc-skip
+    '''
     # Check if any country/channel occurs more than once a week
     issues_df = df[df[column] < 0]
     
@@ -543,7 +821,11 @@ def test_negative_values(df, column, test_number, test_step=''):
 
 
 # test same values
+# sphinx-autodoc-skip
 def test_same_values(df1, df2, key, test_col, test_number, test_step=''):
+    '''
+    # sphinx-autodoc-skip
+    '''
     # Check if any country/channel occurs more than once a week
     test_calc = df1.merge(df2, on=key, how='left')
     issues_df = test_calc[test_calc[f'SUM {test_col}']!=test_calc[test_col]]
@@ -558,8 +840,11 @@ def test_same_values(df1, df2, key, test_col, test_number, test_step=''):
     update_logbook(test_number, issues_df, 'testing that the summing between different steps is correct', test_step)
 
 
+# sphinx-autodoc-skip
 def test_outliers_general(df, numeric_columns, test_number, test_step='', threshold=3):
     """
+    # sphinx-autodoc-skip
+    
     Detect outliers in numeric columns using Z-score and log mean + allowed range.
     """
     issues_list = []
@@ -583,8 +868,11 @@ def test_outliers_general(df, numeric_columns, test_number, test_step='', thresh
     update_logbook(test_number, issues_df, test='General outlier detection', test_step=test_step)
 
 
+# sphinx-autodoc-skip
 def test_outliers_vs_reference(df, reference_df, key_columns, numeric_columns, test_number, test_step='', tolerance=3):
     """
+    # sphinx-autodoc-skip
+    
     Detect outliers where actual value exceeds reference * (1 + tolerance).
     Only checks upper boundary and ignores reference points below 100k
     """
@@ -611,112 +899,13 @@ def test_outliers_vs_reference(df, reference_df, key_columns, numeric_columns, t
     print(f"Test {test_number} {'❌ failed' if not issues_df.empty else '✅ passed'}: Upper-bound outlier check.")
     update_logbook(test_number, issues_df, test='Upper-bound outlier detection vs reference', test_step=test_step)
 
-'''def test_outliers_vs_reference(df, reference_df, key_columns, numeric_columns, test_number, test_step='', tolerance=0.5):
-    """
-    Detect deviations compared to reference data and log mean + allowed range.
-    """
-    merged = df.merge(reference_df, on=key_columns, suffixes=('', '_ref'))
-    issues_list = []
-    for col in numeric_columns:
-        merged['diff_ratio'] = (merged[col] - merged[f"{col}_ref"]).abs() / merged[f"{col}_ref"].replace(0, 1)
-        outliers = merged[merged['diff_ratio'] > tolerance]
-        if not outliers.empty:
-            for _, row in outliers.iterrows():
-                #allowed_lower = row[f"{col}_ref"] * (1 - tolerance)
-                allowed_lower = 0
-                allowed_upper = row[f"{col}_ref"] * (1 + tolerance)
-                issues_list.append({
-                    'Week': row['w/c'],
-                    'Channel ID': row['Channel ID'],
-                    'Column': col,
-                    'Value': row[col],
-                    'Reference': row[f"{col}_ref"],
-                    'Allowed Range': f"[{allowed_lower:.2f}, {allowed_upper:.2f}]"
-                })
-    issues_df = pd.DataFrame(issues_list)
-    print(f"Test {test_number} {'❌ failed' if not issues_df.empty else '✅ passed'}: Outlier vs reference check.")
-    update_logbook(test_number, issues_df, test='Outlier detection vs reference', test_step=test_step)
-    '''
-    
-def update_logbook(test_number, issues_list, test='', test_step=''):
-    """
-    Function to update the logbook based on the presence of missing weeks.
-
-    Parameters:
-    test_number (str): The test number identifier.
-    missing_weeks (pd.DataFrame): DataFrame containing missing weeks information.
-    """
-    print('...updating logbook...\n')
-    today_date = datetime.now().strftime('%Y-%m-%d')
-    file_path = f"../test/issue_lists_{today_date}"
-    os.makedirs(file_path, exist_ok=True)
-
-    logbook_path = f"{file_path}/_test_logbook.xlsx"
-
-    # ✅ If logbook does not exist, create it with headers
-    if not os.path.exists(logbook_path):
-        print("Logbook not found. Creating a new one...")
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Sheet1"
-        headers = ['test number', 'timestamp', 'pass/fail', 'check file', 'test', 'step']
-        ws.append(headers)
-        wb.save(logbook_path)
-
-    # Load the specific sheet into a DataFrame
-    logbook_df = pd.read_excel(logbook_path, sheet_name='Sheet1', engine='openpyxl')
-    
-    # Check if the test number exists in the logbook
-    if test_number not in logbook_df['test number'].values:
-        
-        # Add a new row with the given test number
-        new_row = pd.DataFrame({'test number': [test_number], 'timestamp': [''], 
-                                'pass/fail': [''], 'check file': [''], 
-                                'test': ['']})
-        
-        logbook_df = pd.concat([logbook_df, new_row], ignore_index=True)
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    logbook_df.loc[logbook_df['test number'] == test_number, 'timestamp'] = timestamp
-    
-    if test_step != '':
-        logbook_df.loc[logbook_df['test number'] == test_number, 'test'] = test
-    if test_step != '':
-        logbook_df.loc[logbook_df['test number'] == test_number, 'step'] = test_step
-        
-    if not issues_list.empty:
-        
-        file_name = f"/{test_number}_issue_list.csv"
-        
-        issues_df = pd.DataFrame(issues_list)
-        if 'Channel ID' in issues_df.columns:
-            social_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}", dtype={'Channel ID': 'str'},
-                                     sheet_name='Social Media Accounts new')[['Channel ID', 'Channel Name']]
-            try:
-                socialmedia_accounts['Channel ID'] = socialmedia_accounts['Channel ID'].dropna().apply(lambda x: str(int(x)))
-            except:
-                pass
-            issues_df.merge(social_accounts, on='Channel ID', how='left')
-            if 'Channel Name' in issues_df.columns:
-                # Reorder columns: Channel ID next to Channel Name
-                cols = ['Channel ID', 'Channel Name'] + [c for c in issues_df.columns if c not in ['Channel ID', 'Channel Name']]
-                issues_df = issues_df[cols]
-
-        issues_df.to_csv(file_path+file_name, index=False)
-        logbook_df.loc[logbook_df['test number'] == test_number, 'pass/fail'] = 'fail'
-        logbook_df.loc[logbook_df['test number'] == test_number, 'check file'] = file_path+file_name
-    else:
-        logbook_df.loc[logbook_df['test number'] == test_number, 'pass/fail'] = 'pass'
-        logbook_df.loc[logbook_df['test number'] == test_number, 'check file'] = 'no file created :)'
-    
-
-    # Write the updated DataFrame back to the specific sheet
-    with pd.ExcelWriter(logbook_path, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
-        logbook_df.to_excel(writer, sheet_name='Sheet1', index=False)
-
 ############################################################################################################
-
+# VISUALISATION
 def see_channel_week_heatmap(df, columns_to_visualize, week_col, id_col, 
                              id_name, bus_unit, file_path, gam_info):
+    '''
+    # sphinx-autodoc-skip
+    '''
     for channel in df[id_col].unique():
         temp = df[df[id_col] == channel].sort_values([week_col], )
         # Define the columns to visualize
@@ -744,6 +933,9 @@ def see_channel_week_heatmap(df, columns_to_visualize, week_col, id_col,
         plt.close()
         
 def see_weekly_reach(gam_info, df, column, filename, date_col='w/c', with_nonNull_filter=False, store=False, subset=False):
+    '''
+    # sphinx-autodoc-skip
+    '''
     df = df.sort_values('uniques', ascending=False)
     if with_nonNull_filter:
         print('excluding entries that have no 0 values')
@@ -805,10 +997,16 @@ def see_weekly_reach(gam_info, df, column, filename, date_col='w/c', with_nonNul
         else: 
             plt.show()
         plt.close()
-        
+
+############################################################################################################ 
+# PODCAST RELATED
+
 ############################################################################################################ 
 # FACEBOOK FACTORS
 def test_engagement_logic(df):
+    '''
+    # sphinx-autodoc-skip
+    '''
     test_fail = False
     for index, row in df.iterrows():
         
@@ -822,6 +1020,8 @@ def test_engagement_logic(df):
 
 def youtube_test_input_files(test_number, folder_paths, main_path, week_tester, test_step=''):
     """
+    # sphinx-autodoc-skip
+    
     Function to test input files and check for issues.
 
     Parameters:
@@ -876,27 +1076,12 @@ def youtube_test_input_files(test_number, folder_paths, main_path, week_tester, 
     
     
     update_logbook(test_number, pd.DataFrame(issues_list), 'all weeks in dataset', test_step)
-
-
-
-def site_test_unique_entries(df, column_name, test_number, test_step=''):
-    # Check if all numbers in the specified column are unique
-    unique_values = df[column_name].unique()
-    total_values = df[column_name].count()
-    
-    duplicates = pd.DataFrame(columns=[column_name])
-    if len(unique_values) == total_values:
-        print(f"✅ Pass - All numbers in the column '{column_name}' are unique.")
-    else:
-        print(f"❌ Fail - There are duplicate numbers in the column '{column_name}'.")
-        duplicates = df[column_name][df[column_name].duplicated()]
-        print("Duplicate values:")
-        print(duplicates)
-
-    update_logbook(test_number, duplicates, test='site_test_unique_entries', test_step='')
     
         
 def podcast_test_services_in_results(sql_results, podcast_details, test_number, test_step=''):
+    '''
+    # sphinx-autodoc-skip
+    '''
     # Extract the unique services from the podcast_details DataFrame
     expected_services = set(podcast_details['Service'].unique())
     
@@ -916,7 +1101,11 @@ def podcast_test_services_in_results(sql_results, podcast_details, test_number, 
             print(f"- {service}")
     update_logbook(test_number, issue_df, test='podcast_test_services_in_results', test_step='')
 
+
 def podcast_check_unknown_services(sql_results, test_number, test_step=''):
+    '''
+    # sphinx-autodoc-skip
+    '''
     # Check if 'Unknown' is present in the 'service' column
     unknown_services = sql_results[sql_results['service'] == 'Unknown']
     
