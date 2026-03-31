@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from openpyxl import Workbook
 
+from typing import List #, Optional, Dict, Set
+
 from helper.logging_utils import setup_logger
 logger = setup_logger(__name__)
 
@@ -575,6 +577,44 @@ def test_hierarchy_reach(
     update_logbook(test_number, pd.DataFrame(), f"hierarchy reach test", test_step)
     print("✅ All hierarchy tests passed.")
     return pd.DataFrame()
+
+def test_duplicates(df: pd.DataFrame, columns: List[str], test_number: str, test_step: str = "") -> None:
+    """
+    Fail if any combination of the key columns appears more than once.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame under test.
+    columns : list[str]
+        Columns that define a unique key.
+    test_number : str
+        Unique test identifier.
+    test_step : str, optional
+        Context string for logging.
+    """
+    # Group with dropna=False to treat NaN as a distinct key value (safer for lookups)
+    issues_df = (
+        df.groupby(columns, dropna=False)
+          .size()
+          .reset_index(name="Count")
+    )
+    issues_df = issues_df[issues_df["Count"] > 1]
+
+    if not issues_df.empty:
+        print(f"❌ Test {test_number} failed: The following combinations occur more than once")
+        # Optional: print a small preview for quick debugging
+        print(issues_df.head(10).to_string(index=False))
+    else:
+        print(f"✅ Test {test_number} passed: No combinations occurs more than once.")
+
+    update_logbook(
+        test_number=test_number,
+        issues_list=issues_df,
+        test="Testing the combination of columns for uniqueness",
+        test_step=test_step,
+    )
+
 
 # =============================================================================
 # LOGBOOK

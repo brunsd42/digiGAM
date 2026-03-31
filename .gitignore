@@ -19,6 +19,7 @@ data/**/*.bat
 data/**/*.png
 data/**/*.mov
 data/*
+docs/**/*.csv
 
 # FOLDERS
 graphs/

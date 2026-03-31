@@ -23,6 +23,8 @@ This section describes the end-to-end flow, key modules, and data contracts.
 ## Components
 
 ### Ingestion
+TODO: add redshift background details 
+TODO: add ws lookup table details
 
 ### Processing
 - **Normalization**: Harmonize metrics and field names

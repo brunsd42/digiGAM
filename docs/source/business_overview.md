@@ -23,7 +23,13 @@ These outputs feed into:
 
 - **Leadership** – weekly reach, content effectiveness, strategic prioritization  
 - **Analytics** – dashboards, variance analysis, campaign performance  
-- **Operations** – early detection of data issues and ingestion failures  
+- **Operations** – early detection of data issues and ingestion failures
+
+A lookup sheet is used to combine all the variables that are used across the
+pipeline, including the service and platform hierarchy, the social media
+accounts the site-api queries and the country and time codes used. See the
+[lookup sheet](https://docs.google.com/spreadsheets/d/1Z8tEC5OviUf_QwTbfseEE4i59rB63Yxm6WxCqIAGCLw/edit?usp=sharing)
+for details.
 
 ---
 

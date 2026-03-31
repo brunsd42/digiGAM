@@ -1,15 +1,51 @@
 # YouTube
-## Ingestion
 
-**Tables used**
+Ingestion
+---------
+### source query
 
-- **Engagement:**  
+**Engagement:**  
+```
 
-- **Country distribution:**  
-  `central_insights.adverity_social_facebook_page_fans_by_country`
+```
+**Country distribution:** 
+```
 
-**Weekly ingestion behaviour**
+```
 
+Processing
+---------
+**Engagements**: 
+
+**Country**:
+
+
+Combining Sources & Calculating Reach 
+---------
+
+
+Account Details
+---------------
+active accounts:
+```{csv-table}
+:header-rows: 1
+:file: ../_static/tables/INS_active_accounts.csv
+```
+
+inactive accounts:
+```{csv-table}
+:header-rows: 1
+:file: ../_static/tables/INS_inactive_accounts.csv
+```
+
+unclear accounts:
+```{csv-table}
+:header-rows: 1
+:file: ../_static/tables/INS_unclear_accounts.csv
+```
+
+Cadence
+-------
 - **If engagement data is missing for a week**  
   → The week is **omitted entirely** for Facebook.  
   No fallback and no estimation is applied.

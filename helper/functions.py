@@ -10,18 +10,21 @@ This module includes:
 All functions are used by ingestion pipelines across platforms.
 """
 from IPython.display import display
+from typing import Optional
 
 import os
 import pandas as pd 
 import numpy as np
 import psycopg2
-import urllib
+import pyodbc
 import json
+
+import urllib
+import urllib.parse
+
 import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-
-import urllib.parse
 
 # --- Project/package imports
 from pathlib import Path
@@ -37,44 +40,107 @@ logger = setup_logger(__name__)
 LOOKUP_XLSX = Path(__file__).resolve().parent / "GAM_Lookup.xlsx"
 
 ######################## Lookup File
+def run_lookup_test(df, cols, platformID, script, start_index, step_name):
+    """DRY helper for consistent test naming."""
+    test_ids = [f"{platformID}_{script}_{i:02d}" for i in range(start_index, start_index + 3)]
+    test_functions.test_lookup_files(df, cols, test_ids, test_step=step_name)
+    return start_index + 3  # return next starting index
 
-def load_and_validate_all_lookups(service_cols = ['ServiceID', 'Type'],
+def load_all_lookups(
+        gam_info,
+        platformID,
+        script,
+        with_country=False,
+        country_col=['PlaceID'],
+        with_pop_col=False,
+        with_service=False,
+        service_cols=['ServiceID', 'Type'],
+        country_cols=['PlaceID'],
+        platform_cols=['PlatformID', 'Type']):
+    """
+    Unified, consistent, DRY lookup loader.
+    Loads all lookup sheets, validates each with consistent test IDs,
+    and returns a tidy dictionary of lookup frames.
+    """
+
+    path = LOOKUP_XLSX
+    out = {}
+    i = 1  # test counter
+
+    # --------------------------------------------------------
+    # 1. COUNTRY LOOKUP (Always loaded)
+    # --------------------------------------------------------
+    if with_country:
+        if with_pop_col:
+            country_cols+=[gam_info['population_column']]
+        country_codes = pd.read_excel(path, sheet_name='CountryID')[country_cols]
+        i = run_lookup_test(country_codes, country_cols, platformID, script, i, "CountryID")
+        out['country_codes_full'] = country_codes
+
+    # --------------------------------------------------------
+    # 2. PLATFORM LOOKUP
+    # --------------------------------------------------------
+    platform_codes = pd.read_excel(path, sheet_name='PlatformID')[platform_cols]
+    i = run_lookup_test(platform_codes, platform_cols, platformID, script, i, "PlatformID")
+    out['platform_codes'] = platform_codes
+
+    # --------------------------------------------------------
+    # 3. SERVICE LOOKUP
+    # --------------------------------------------------------
+    if with_service:
+        service_codes = pd.read_excel(path, sheet_name='ServiceID')[service_cols]
+        i = run_lookup_test(service_codes, service_cols, platformID, script, i, "ServiceID")
+        out['service_codes'] = service_codes
+
+    # --------------------------------------------------------
+    # 4. WEEK TESTER (GAM Period)
+    # --------------------------------------------------------
+    week_tester = pd.read_excel(path, sheet_name='GAM Period')
+    week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
+
+    today = pd.Timestamp.today().normalize()
+    last_monday = today - pd.Timedelta(days=(today.weekday() % 7))
+    week_tester = week_tester[week_tester['w/c'] < last_monday]
+
+    i = run_lookup_test(
+        week_tester, ['w/c'], platformID, script, i, "GAM Period"
+    )
+
+    out['time_codes'] = week_tester
+
+    # --------------------------------------------------------
+    # 5. SOCIAL MEDIA ACCOUNTS 
+    # --------------------------------------------------------
+    dtype_dict = {'Channel ID': 'str', 'Linked FB Account': 'str'}
+    sma = pd.read_excel(path, dtype=dtype_dict, sheet_name='Social Media Accounts new')
+
+    sma = sma[sma['PlatformID'] == platformID]
+    sma = sma[sma['Status'] == 'active']
+    sma['Channel ID'] = platformID + sma['Channel ID']
+    sma['Start'] = pd.to_datetime(sma['Start'], errors='coerce', dayfirst=True)
+    sma['End'] = pd.to_datetime(sma['End'], errors='coerce', dayfirst=True)
+
+    i = run_lookup_test(
+        sma, ['Channel ID'], platformID, script, i, "Social Media Accounts"
+    )
+
+    out['socialmedia_accounts'] = sma
+
+    return out
+
+
+def load_and_validate_all_lookups(gam_info, 
+                                  service_cols = ['ServiceID', 'Type'],
                                   country_cols = ['PlaceID', 'Population2020'],
                                   platform_cols = ['PlatformID', 'Type'],
-                                  time_cols = ['w/c'],
                                   test_script = ""
                                  ):
-    """
-    Load all lookup tables and run structural tests.
-
-    Parameters
-    ----------
-    service_cols : list[str]
-        Columns to load from the ServiceID sheet.
-    country_cols : list[str]
-        Columns to load from the CountryID sheet.
-    platform_cols : list[str]
-        Columns to load from the PlatformID sheet.
-    time_cols : list[str]
-        Columns to load from the GAM Period sheet.
-    test_script : str
-        Prefix used for test numbering.
-
-    Returns
-    -------
-    dict
-        Dictionary containing:
-        - country_codes
-        - platform_codes
-        - service_codes
-        - time_codes
-    """
+    
     path = LOOKUP_XLSX
 
     country_codes = pd.read_excel(path, sheet_name='CountryID')[country_cols]
     platform_codes = pd.read_excel(path, sheet_name='PlatformID')[platform_cols]
     service_codes = pd.read_excel(path, sheet_name='ServiceID')[service_cols]
-    time_codes = pd.read_excel(path, sheet_name='GAM Period')[time_cols]
 
     # Run tests once centrally
     test_functions.test_lookup_files(country_codes, country_cols, 
@@ -86,21 +152,88 @@ def load_and_validate_all_lookups(service_cols = ['ServiceID', 'Type'],
     test_functions.test_lookup_files(service_codes, service_cols, 
                                      [f"{test_script}_07",f"{test_script}_08",f"{test_script}_09"],
                                      test_step="ServiceID")
-    test_functions.test_lookup_files(time_codes, time_cols, 
-                                     [f"{test_script}_10",f"{test_script}_11",f"{test_script}_12"],
-                                     test_step="GAM Period")
 
     return {
         'country_codes': country_codes,
         'platform_codes': platform_codes,
         'service_codes': service_codes,
-        'time_codes': time_codes,
     }
 
+def lookup_loader(gam_info, platformID, script, 
+                  with_country=False, country_col=['PlaceID'],
+                  with_pop_col=False):
+    '''
+    tbd
+    '''
+    path = LOOKUP_XLSX
+
+    # week 
+    week_cols = ['w/c']
+    week_tester = pd.read_excel(path, sheet_name='GAM Period')
+    week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
+    
+    today = pd.Timestamp.today().normalize()
+    last_monday = today - pd.Timedelta(days=(today.weekday() % 7))
+    week_tester = week_tester[week_tester['w/c'] < last_monday]
+
+    test_functions.test_lookup_files(week_tester, ['w/c'], 
+                                     [f"{platformID}_{script}_00", 
+                                      f"{platformID}_{script}_01", 
+                                      f"{platformID}_{script}_02"], 
+                                     test_step = "lookup files - ensuring week tester is correct")
+    # social media accoutns
+    channel_cols=['Channel ID']
+    dtype_dict = {'Channel ID': 'str',
+                  'Linked FB Account': 'str'}
+    socialmedia_accounts = pd.read_excel(path, dtype=dtype_dict,
+                                         sheet_name='Social Media Accounts new')
+    
+    socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
+    socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
+    socialmedia_accounts['Channel ID'] = platformID + socialmedia_accounts['Channel ID']
+    socialmedia_accounts['Start'] = pd.to_datetime(socialmedia_accounts['Start'], 
+                                                   errors='coerce', dayfirst=True)
+    socialmedia_accounts['End'] = pd.to_datetime(socialmedia_accounts['End'], 
+                                                   errors='coerce', dayfirst=True)
+    test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], 
+                                     [f"{platformID}_{script}_03", 
+                                      f"{platformID}_{script}_04", 
+                                      f"{platformID}_{script}_05"],
+                                     test_step = "lookup files - ensuring social media accounts is correct")
+    
+    # country
+    if with_country:
+        country_cols = list(set(country_col + ['PlaceID', gam_info['population_column']]))
+        country_codes = pd.read_excel(path, sheet_name='CountryID',
+                                      keep_default_na=False)[country_cols]
+        
+        test_functions.test_lookup_files(country_codes, country_cols, 
+                                         [f"{platformID}_{script}_06", 
+                                          f"{platformID}_{script}_07", 
+                                          f"{platformID}_{script}_08"],
+                                         test_step="lookup files - ensuring country codes is correct")
+        if with_pop_col:
+            return {'week_tester': week_tester,
+                    'socialmedia_accounts': socialmedia_accounts,
+                    'country_codes': country_codes,
+                   }
+        else:
+            return {'week_tester': week_tester,
+                    'socialmedia_accounts': socialmedia_accounts,
+                    'country_codes': country_codes.drop(columns=gam_info['population_column']),
+                   }
+    else:
+        return {'week_tester': week_tester,
+                'socialmedia_accounts': socialmedia_accounts,
+               }
+
 ################### PIANO
-def convert_url_to_query(url: str, 
-                          start: str, 
-                          end: str) -> dict | None:
+
+def convert_url_to_query(
+    url: str,
+    start: str,
+    end: str
+) -> Optional[dict]:
     
     """
     Decode a Piano API URL and inject start/end dates.
@@ -311,29 +444,10 @@ def include_uk_decision(df, lookup_or_bu, gam_info=None, bu_name=None):
         return df[df["PlaceID"] != "UK"].copy()
     return df.copy()
 
-# not used so far
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ######################## REDSHIFT 
 def execute_sql_query(sql_query):
     '''
-    # sphinx-autodoc-skip
+    
     '''
     host = security_config.REDSHIFT_HOST
     port = security_config.REDSHIFT_PORT
@@ -359,75 +473,29 @@ def execute_sql_query(sql_query):
         cursor.close()
         conn.close()
 
-######################## lookup file
-def lookup_loader(gam_info, platformID, script, 
-                  with_country=False, country_col=['PlaceID'],
-                  with_pop_col=False):
-    '''
-    # sphinx-autodoc-skip
-    '''
-    # week 
-    week_cols = ['w/c']
-    week_tester = pd.read_excel(f"../../{gam_info['lookup_file']}", 
-                                sheet_name='GAM Period')
-    week_tester['w/c'] = pd.to_datetime(week_tester['w/c'])
-    
-    today = pd.Timestamp.today().normalize()
-    last_monday = today - pd.Timedelta(days=(today.weekday() % 7))
-    week_tester = week_tester[week_tester['w/c'] < last_monday]
 
-    test_functions.test_lookup_files(week_tester, ['w/c'], 
-                                     [f"{platformID}_{script}_00", 
-                                      f"{platformID}_{script}_01", 
-                                      f"{platformID}_{script}_02"], 
-                                     test_step = "lookup files - ensuring week tester is correct")
-    # social media accoutns
-    channel_cols=['Channel ID']
-    dtype_dict = {'Channel ID': 'str',
-                  'Linked FB Account': 'str'}
-    socialmedia_accounts = pd.read_excel(f"../../{gam_info['lookup_file']}",
-                                         dtype=dtype_dict,
-                                         sheet_name='Social Media Accounts new')
-    
-    socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['PlatformID'] == platformID]
-    socialmedia_accounts = socialmedia_accounts[socialmedia_accounts['Status'] == 'active']
-    socialmedia_accounts['Channel ID'] = platformID + socialmedia_accounts['Channel ID']
-    socialmedia_accounts['Start'] = pd.to_datetime(socialmedia_accounts['Start'], 
-                                                   errors='coerce', dayfirst=True)
-    socialmedia_accounts['End'] = pd.to_datetime(socialmedia_accounts['End'], 
-                                                   errors='coerce', dayfirst=True)
-    test_functions.test_lookup_files(socialmedia_accounts, ['Channel ID'], 
-                                     [f"{platformID}_{script}_03", 
-                                      f"{platformID}_{script}_04", 
-                                      f"{platformID}_{script}_05"],
-                                     test_step = "lookup files - ensuring social media accounts is correct")
-    
-    # country
-    if with_country:
-        country_cols = list(set(country_col + ['PlaceID', gam_info['population_column']]))
-        country_codes = pd.read_excel(f"../../{gam_info['lookup_file']}",
-                                      sheet_name='CountryID',
-                                      keep_default_na=False)[country_cols]
-        
-        test_functions.test_lookup_files(country_codes, country_cols, 
-                                         [f"{platformID}_{script}_06", 
-                                          f"{platformID}_{script}_07", 
-                                          f"{platformID}_{script}_08"],
-                                         test_step="lookup files - ensuring country codes is correct")
-        if with_pop_col:
-            return {'week_tester': week_tester,
-                    'socialmedia_accounts': socialmedia_accounts,
-                    'country_codes': country_codes,
-                   }
-        else:
-            return {'week_tester': week_tester,
-                    'socialmedia_accounts': socialmedia_accounts,
-                    'country_codes': country_codes.drop(columns=gam_info['population_column']),
-                   }
-    else:
-        return {'week_tester': week_tester,
-                'socialmedia_accounts': socialmedia_accounts,
-               }
+# not used so far
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ################################ single platform calculations
