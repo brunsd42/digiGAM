@@ -229,6 +229,88 @@ def api_call(data, api_query_key):
     # Convert all data into a pandas DataFrame
     return pd.DataFrame(all_data_records)
 
+def gnl_replacer(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Replace ServiceID == 'GNL' with 'BNO'.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing a 'ServiceID' column.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame where all 'GNL' service identifiers are replaced by 'BNO'.
+    """
+
+    if "ServiceID" not in df.columns:
+        raise KeyError("Column 'ServiceID' not found in DataFrame.")
+
+    df.loc[df["ServiceID"] == "GNL", "ServiceID"] = "BNO"
+    return df
+
+def include_uk_decision(df, lookup_or_bu, gam_info=None, bu_name=None):
+    """
+    Unified UK-inclusion / exclusion logic for both SOCIAL platforms and SITE.
+
+    ▼ SOCIAL MEDIA LOGIC
+    If the dataframe contains 'Channel ID', and 'lookup_or_bu' is a lookup table
+    containing ['Channel ID', 'Excluding UK'], we use the SOCIAL rule:
+        - For each Channel ID, check 'Excluding UK' == 'Yes'
+        - Drop UK rows for those channels only.
+
+    ▼ SITE LOGIC
+    If the dataframe does NOT contain 'Channel ID', and bu_name + gam_info are provided,
+    we use SITE's BU rule:
+        - business_units[BU]['exclude_UK'] = True → drop UK rows
+        - business_units[BU]['exclude_UK'] = False → keep UK rows
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataset (either social or site).
+    lookup_or_bu : pd.DataFrame or dict
+        If social → lookup table containing ['Channel ID', 'Excluding UK'].
+        If site   → ignored; the BU rule is applied instead.
+    gam_info : dict, optional
+        Full configuration dict containing business unit definitions.
+    bu_name : str, optional
+        The business unit name (e.g. 'WSL', 'GNL_', 'WOR') for SITE logic.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with the correct UK exclusion logic applied.
+    """
+
+    # -------------------------
+    # CASE 1: SOCIAL MEDIA LOGIC
+    # -------------------------
+    if "Channel ID" in df.columns:
+        lookup = lookup_or_bu
+        temp = df.merge(
+            lookup[["Channel ID", "Excluding UK"]], 
+            on="Channel ID",
+            how="left"
+        )
+        return temp[~((temp["PlaceID"] == "UK") & (temp["Excluding UK"] == "Yes"))]
+
+    # -------------------------
+    # CASE 2: SITE LOGIC
+    # -------------------------
+    if bu_name is None or gam_info is None:
+        raise ValueError(
+            "SITE UK decision requires both gam_info and bu_name. "
+            "For social platforms pass a lookup with Channel ID."
+        )
+
+    exclude_uk = gam_info["business_units"][bu_name]["exclude_UK"]
+
+    if exclude_uk:
+        return df[df["PlaceID"] != "UK"].copy()
+    return df.copy()
+
 # not used so far
 
 
@@ -601,29 +683,6 @@ def apply_first_split_backfill(
 
 
 
-def gnl_expander(df):
-    """
-    # sphinx-autodoc-skip
-    
-    Duplicate rows where ServiceID == 'GNL' into two rows with ServiceID 'BNI' and 'BNO'.
-
-    Parameters:
-        df (pd.DataFrame): DataFrame containing a 'ServiceID' column.
-
-    Returns:
-        pd.DataFrame: DataFrame with additional rows for BNI and BNO.
-    """
-    gnl_rows = df[df['ServiceID'] == 'GNL']
-    if not gnl_rows.empty:
-        bni_rows = gnl_rows.copy()
-        bni_rows['ServiceID'] = 'BNI'
-
-        bno_rows = gnl_rows.copy()
-        bno_rows['ServiceID'] = 'BNO'
-
-        df = pd.concat([df, bni_rows, bno_rows], ignore_index=True)
-
-    return df
 
 
 def filter_channels_by_weeks(df, week_col='w/c', channel_col='Channel ID', min_weeks=12):
@@ -666,12 +725,6 @@ def filter_channels_by_weeks(df, week_col='w/c', channel_col='Channel ID', min_w
 
     return filtered_df
     
-def include_uk_decision(df, lookup):
-    '''
-    # sphinx-autodoc-skip
-    '''
-    temp = df.merge(lookup[['Channel ID', 'Excluding UK']], on=['Channel ID'] , how='left')
-    return temp[~((temp['PlaceID']=='UK') & (temp['Excluding UK']=='Yes'))]
 
 def calculate_annualy(df, platformID, gam_info, aggregation_type='new'):
     '''
@@ -786,25 +839,6 @@ def sainsbury_formula(df, population_col, channel_list, col_name, deal_with_zero
     df[col_name] = df.apply(calculate_formula, axis=1)
     return df
 
-def calculate_weekly_sumServices(df, serviceID, platformID, gam_info):
-    '''
-    # sphinx-autodoc-skip
-    '''
-    df = df.copy()
-    # temporary to explain discrepancy to minnie's values
-    df_weekly = df.groupby(['PlaceID', 'w/c'])['Reach'].sum().reset_index()
-    df_weekly['Reach'] = df_weekly['Reach']
-    df_weekly['ServiceID'] = serviceID
-    df_weekly['PlatformID'] = platformID
-    df_weekly['YearGAE'] = gam_info['YearGAE']
-    
-    path = f"../data/singlePlatform/{platformID}/weekly/"
-    filename = f"{gam_info['file_timeinfo']}_WEEKLY_{platformID}_{serviceID}byCountry.xlsx"
-    
-    col_order = ['YearGAE', 'ServiceID', 'PlatformID', 'PlaceID', 'w/c', 'Reach']
-    df_weekly.to_excel(path+filename, index=None)
-    
-    return df_weekly
 
 def calculate_weekly_Services(df, serviceID, platformID, pop_size_col, gam_info, combi_type='sainsbury', ):
     '''
@@ -846,8 +880,6 @@ def process_overlap(data, service1, service2, grouped_service,
                     overlap_type, overlap_service_id, platformID, gam_info, path,
                     country_codes, pop_size_col, overlaps='n/a'):
     """
-    # sphinx-autodoc-skip
-    
     Combines two services into a grouped service, applying overlap logic if both are present.
     If only one service has data, it is used directly.
     """

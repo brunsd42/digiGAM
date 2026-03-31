@@ -12,20 +12,28 @@ Each API query that returns values is stored in a .csv file with the columns:
 In addition there can be additional supporting columns that will be relevant in processing the datasets.
 
 ---
-There are a handful of partners that are not ingestable via Piano and therefore provide their data (currently) annually via excel sheets, these are: 
-- Learning English Partners
-- BBC.com Syndication Partners
 
-For the annual **Global Audience Measurement** these manual sources are ingested in addition to provide a more complete picutre of Site reach.
+Manual ingestion for Site covers partner sources that do not report through Piano.
+These datasets are supplied annually via Excel by BBC Learning English and BBC.com Syndication Partners (GNL).  
+They provide reach values which we align to our weekly reach metric once expanded across all GAM weeks.
+
+Each manual source file is read and stored as a .csv file with the columns:
+- w/c  
+- m_unique_visitors  
+- PlaceID  
+- ServiceID  
+- PlatformID  
+
 
 Processing
 ---------
-Processing the automated data files is aimed to complete the gaps in PlatformID, ServiceID, PlaceID based on the API queries. Especially ServiceID needs to be completed from various sources including a mapping of the API query to the responding ServiceID, the Service mentioned in site_level2 in the API queries, and ultimately from fields such as language, NonJS or App.
+Processing the automated data files is aimed to complete the gaps in PlatformID, ServiceID, PlaceID based on the API queries. Especially ServiceID needs to be completed from various sources including a mapping of the API query to the responding ServiceID, the Service mentioned in site_level2 in the API queries, and ultimately from fields such as language, NonJS or App. Finally all ServiceID values reported as “GNL” are normalised to the base service “BNO”.
 Further the countries provided by Piano are mapped to PlaceID by piano's provided geo_country. 
 Testing includes site, platform and country recognition and testing for any missing weeks per piano report. 
 
 ---
-Regarding the *manual* ...
+
+Processing the manual partner data ensures that identifiers supplied in the Excel files are aligned with the digiGAM schema. Country and platform fields are validated against the standard lookup tables, and all ServiceID values reported as “GNL” are normalised to the base service “BNO”. The dataset is then joined to the GAM week lookup to attach YearGAE and WeekNumber_finYear. Final tests confirm that each partner service has valid PlaceID, PlatformID and ServiceID entries and that all required GAM weeks are present.
 
 Combining Sources
 ---------

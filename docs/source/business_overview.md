@@ -42,7 +42,7 @@ Each platform has a dedicated ingestion job that:
   - Incomplete joins  
   - File size anomalies  
 
-### **Processing & enrichment**
+### **Processing & Enrichment**
 Once raw files are ingested, each platform’s processing script can have these processing steps:
 
 - Combine weekly CSVs (where applicable)
@@ -51,7 +51,7 @@ Once raw files are ingested, each platform’s processing script can have these 
 - Runs join integrity tests using a standardized test suite  
 - Outputs a **processed table** for each platform
 
-### **Business Unit Formation & reach calculation**
+### **Business Unit Formation & Reach Calculation**
 blub blub blub
 
 ### **Cross-Platform Calculation**

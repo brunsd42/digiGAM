@@ -4,24 +4,39 @@
 This section describes the end-to-end flow, key modules, and data contracts.
 
 ## High-level flow
+
+- Ingestion of raw data 
+- Processing to weekly reach metric
+- Combine all platform-related sources into one file - reach x geography
+- Calculate Business Units, aka Service Hierarchies
+- Combine Social Media Platforms (WSC)
+- Combine Total Digital (WT-)
+
+## Design Principles
+
+- Ingestion always creates the “raw weekly” data structure
+- Platform duplication is a source characteristic, not processing logic
+- Processing should never create new rows, only new columns
+- Tests depend on ingestion having full week×platform coverage
+- ServiceID is a semantic concept, not a source property
+
 ## Components
 
 ### Ingestion
 
-### Transforms
+### Processing
 - **Normalization**: Harmonize metrics and field names
 - **Country attribution**: Apply modeled geo splits when missing
+- **Base Services**: GNL gets remapped to BNO
 - Emit **curated** datasets with schemas suitable for de-duplication
-
-### De-duplication
-- Intra-platform: deterministic where IDs are available
-- Cross-platform: modeled overlaps with device factors and guardrails
 - Outputs **unique viewers** by platform/service/country/week
 
-### Rollups
+### Business Hiearchy Calculation
 - Aggregate from **service** to **business unit** based on taxonomy
 - Respect **exclude_UK** and platform-inclusion flags
-- Produce weekly **business** reach
+
+### Platform Aggregation
+- Cross-platform: modeled overlaps with device factors and guardrails
 
 ### Outputs & Monitoring
 - Publish weekly reach tables/files for dashboards and analysts

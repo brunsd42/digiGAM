@@ -21,6 +21,9 @@ from openpyxl import Workbook
 from helper.logging_utils import setup_logger
 logger = setup_logger(__name__)
 
+# points to: GAM_pivot/helper/GAM_Lookup.xlsx
+LOOKUP_XLSX = Path(__file__).resolve().parent / "GAM_Lookup.xlsx"
+
 # =============================================================================
 # LOOKUP TESTS
 # =============================================================================
@@ -416,6 +419,163 @@ def test_weeks_presence_per_account(
 
     return missing
 
+def test_hierarchy_reach(
+    test_number,
+    mode,
+    gam_info,
+    df,
+    key,
+    metric_col,
+    test_step,
+    round_metric=False
+):
+    """
+    Test that each parent service/platform has Reach >= Reach of each of its
+    child services/platforms. A parent may be smaller than the *sum* of its
+    children but must not be smaller than any individual child.
+
+    Parameters
+    ----------
+    test_number : str
+        Identifier for logbook entry.
+    mode : {'Service', 'Platform'}
+        Which hierarchy to validate.
+    gam_info : dict
+        Configuration dictionary, must contain the lookup file.
+    df : pd.DataFrame
+        Must contain columns matching mode ('ServiceID' or 'PlatformID')
+        plus Reach and the grouping keys.
+    key : list[str]
+        Columns that define the reach subgroup (e.g. ['w/c','PlaceID']).
+    metric_col : str
+        Name of the metric to compare (e.g., 'Reach').
+    test_step : str
+        Description for logging.
+    round_metric : bool, optional
+        Whether to round parent/child metrics before comparison.
+
+    Returns
+    -------
+    pd.DataFrame
+        All failing cases, empty DataFrame if none.
+    """
+
+    # --------------------------------------
+    # Sanity checks
+    # --------------------------------------
+    if mode not in ["Service", "Platform"]:
+        raise ValueError("mode must be 'Service' or 'Platform'.")
+
+    if not isinstance(key, list):
+        raise ValueError("key must be a list of column names.")
+
+    if any(col not in df.columns for col in key):
+        raise KeyError(f"Some key columns missing: {key}")
+
+    # --------------------------------------
+    # Determine hierarchy sheet and ID column
+    # --------------------------------------
+    if mode == "Service":
+        sheet_name = "Service Hierarchy"
+        id_col = "ServiceID"
+        dimension = "PlatformID"
+    else:
+        sheet_name = "Platform Hierarchy"
+        id_col = "PlatformID"
+        dimension = "ServiceID"
+
+    # --------------------------------------
+    # Load hierarchy
+    # --------------------------------------
+    
+    hierarchy_df = pd.read_excel(
+        LOOKUP_XLSX,
+        sheet_name=sheet_name,
+        engine="openpyxl"
+    )[['Parent', 'Child']].dropna()
+
+    # Keep only hierarchy relevant to df
+    hierarchy_df = hierarchy_df[
+        hierarchy_df['Parent'].isin(df[id_col]) &
+        hierarchy_df['Child'].isin(df[id_col])
+    ]
+
+    if hierarchy_df.empty:
+        logger.info(f"No applicable hierarchy found for mode={mode}.")
+        return pd.DataFrame()
+
+    # --------------------------------------
+    # Build descendant tree (multi-level)
+    # --------------------------------------
+    def get_descendants(mapping, parent):
+        descendants = set()
+        stack = [parent]
+        while stack:
+            cur = stack.pop()
+            children = mapping[mapping['Parent'] == cur]['Child'].tolist()
+            for child in children:
+                if child not in descendants:
+                    descendants.add(child)
+                    stack.append(child)
+        return descendants
+
+    expanded = []
+    for parent in hierarchy_df['Parent'].unique():
+        desc = get_descendants(hierarchy_df, parent)
+        for child in desc:
+            expanded.append({'Parent': parent, 'Child': child})
+
+    if not expanded:
+        logger.info("Hierarchy exists but no descendants found.")
+        return pd.DataFrame()
+
+    expanded_df = pd.DataFrame(expanded)
+
+    # --------------------------------------
+    # Compare parent vs child
+    # --------------------------------------
+    issues = []
+
+    for subgroup in df[dimension].unique():
+        temp = df[df[dimension] == subgroup]
+
+        merged = (
+            expanded_df
+            .merge(temp, left_on="Child", right_on=id_col, how="inner")
+            .rename(columns={metric_col: "Child_val"})
+            .drop(columns=id_col)
+            .merge(
+                temp,
+                left_on=key + ["Parent"],
+                right_on=key + [id_col],
+                how="inner",
+            )
+            .rename(columns={metric_col: "Parent_val"})
+            .drop(columns=id_col)
+        )
+
+        if round_metric:
+            merged["Child_val"] = merged["Child_val"].round()
+            merged["Parent_val"] = merged["Parent_val"].round()
+
+        fail = merged[merged["Child_val"] > merged["Parent_val"]].copy()
+        if not fail.empty:
+            fail["diff"] = fail["Child_val"] - fail["Parent_val"]
+            issues.append(fail)
+
+    # --------------------------------------
+    # Compile results
+    # --------------------------------------
+    if issues:
+        full = pd.concat(issues).sort_values("diff", ascending=False)
+        update_logbook(test_number, full, f"hierarchy reach test", test_step)
+        print("❌ Hierarchy test failed - see issues above.")
+        return full
+
+    update_logbook(test_number, pd.DataFrame(), f"hierarchy reach test", test_step)
+    print("✅ All hierarchy tests passed.")
+    return pd.DataFrame()
+
 # =============================================================================
 # LOGBOOK
 # =============================================================================
@@ -609,112 +769,6 @@ def test_allowed_values(df, test_column, allowed_values, test_number, test_step=
         print("✅ Pass - found only allowed values")
     update_logbook(test_number, issues_df, 'testing no other values than specific occur in col', test_step)
 
-def test_hierarchy_reach(test_number, mode, gam_info, df, key, metric_col, test_step, round_metric=False):
-    """
-    # sphinx-autodoc-skip
-    
-    Test that the reach of each parent service is not smaller than any of its child services, but it is okay if it is smaller than the sum of its child services.
-
-    Parameters:
-    gam_info (dict): A dictionary containing information including the lookup file name.
-    df (pd.DataFrame): A DataFrame containing reach data with columns 'ServiceID' and 'Reach'.
-    test_number (str): The test number identifier.
-
-    Returns:
-    bool: True if the test passes, False otherwise.
-
-    Example
-    # Create a sample test DataFrame
-    data = {
-        'PlatformID': ['DPO', 'DPO', 'DPO', 'DPO', 'POD', 'POD', 'POD', 'POD'],
-        'PlaceID': ['Country1', 'Country1', 'Country1', 'Country1', 'Country2', 'Country2', 'Country2', 'Country2'],
-        'ServiceID': ['WSE', 'ARA', 'ANW', 'AX2', 'WSE', 'ANW', 'ARA', 'AX2'],
-        'Reach': [100, 150, 80, 200, 300, 350, 250, 400]
-    }
-    
-    # Convert the data to a DataFrame
-    test_df = pd.DataFrame(data)
-    
-    # Display the DataFrame
-    merged_df = test_hierarchy_reach(gam_info, test_df, "3_test")
-    
-    """
-    if mode == 'Service':
-        sheet_name = 'Service Hierarchy'
-        col_name = 'ServiceID'
-        
-        dimension = 'PlatformID'
-        dimension_to_subgroup = df[dimension].unique().tolist()
-        # make sure only one platform is in 
-
-    if mode == 'Platform':
-        sheet_name = 'Platform Hierarchy'
-        col_name = 'PlatformID'
-        
-        dimension = 'ServiceID'
-        dimension_to_subgroup = df[dimension].unique().tolist()
-        # make sure only one service is in 
-        
-    # Read the hierarchy from the Excel file
-    hierarchy_df = pd.read_excel(f"../../{gam_info['lookup_file']}", sheet_name=sheet_name,
-                                 engine='openpyxl')[['Parent', 'Child']].dropna()
-    # filter to only services in dataset
-    hierarchy_df = hierarchy_df[hierarchy_df['Parent'].isin(df[col_name]) & hierarchy_df['Child'].isin(df[col_name])]
-
-    # Function to get all descendants of a parent using an iterative approach
-    def get_descendants(df, parent):
-        descendants = set()
-        stack = [parent]
-        while stack:
-            current = stack.pop()
-            children = df[df['Parent'] == current]['Child'].tolist()
-            for child in children:
-                if child not in descendants:
-                    descendants.add(child)
-                    stack.append(child)
-        return descendants
-    
-    # Expand the parent-child combinations
-    expanded_combinations = []
-    for parent in hierarchy_df['Parent'].unique():
-        descendants = get_descendants(hierarchy_df, parent)
-        for descendant in descendants:
-            expanded_combinations.append({'Parent': parent, 'Child': descendant})
-    
-    # Create a new DataFrame with expanded combinations
-    hierarchy_df = pd.DataFrame(expanded_combinations)
-
-    issues_list = []
-    for subgroup in dimension_to_subgroup: #either for service if platform is run or vice versa
-        temp = df[df[dimension] == subgroup]
-        # add child reach platform and places
-        merged_df = hierarchy_df.merge(temp, left_on='Child', right_on=col_name, how='inner')
-        merged_df = merged_df.rename(columns={metric_col: f'Child_{metric_col}'}).drop(columns=col_name)
-    
-        # add parent reach to service, platform and place
-        merged_df = merged_df.merge(temp, left_on=key+['Parent'], right_on=key+[col_name], how='inner')
-        merged_df = merged_df.rename(columns={metric_col: f'Parent_{metric_col}'}).drop(columns=col_name)
-    
-        # Optional rounding
-        if round_metric:
-            merged_df[f'Child_{metric_col}'] = merged_df[f'Child_{metric_col}'].round()
-            merged_df[f'Parent_{metric_col}'] = merged_df[f'Parent_{metric_col}'].round()
-    
-        # Run the test
-        issues_df = merged_df[merged_df[f'Child_{metric_col}'] > merged_df[f'Parent_{metric_col}']]
-        issues_df.loc[:, 'diff'] = issues_df[f'Child_{metric_col}'] - issues_df[f'Parent_{metric_col}']
-
-        issues_list.append(issues_df)
-    full_issue_df = pd.concat(issues_list)
-    update_logbook(test_number, full_issue_df.sort_values('diff', ascending=False), 
-                   'testing platform hierarchy reach', test_step)
-    
-    if not issues_df.empty:
-        print("❌ Test failed. Issues found and saved to '../test/issues/'.")
-        return issues_df
-    
-    print("✅ All tests passed.")
-    return issues_df
 
 def test_adding_WWW(start, test_val, end, test_number, test_step='', ):
     '''
