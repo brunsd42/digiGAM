@@ -18,6 +18,7 @@ data/**/*.zip
 data/**/*.bat
 data/**/*.png
 data/**/*.mov
+data/*
 
 # FOLDERS
 graphs/
